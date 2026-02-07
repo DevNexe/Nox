@@ -1,0 +1,395 @@
+﻿from __future__ import annotations
+
+from pathlib import Path
+from typing import Optional
+
+from .lexer import Lexer
+from .parser import Parser
+from .interpreter import Interpreter
+from .errors import NoxSyntaxError, NoxRuntimeError
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich import box
+from rich.console import Group
+
+def _ensure_utf8() -> None:
+    import sys
+    import io
+    import os
+
+    # Force UTF-8 for the current process I/O
+    os.environ["PYTHONIOENCODING"] = "utf-8"
+
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+                continue
+            except Exception:
+                pass
+        try:
+            if hasattr(stream, "buffer"):
+                wrapped = io.TextIOWrapper(stream.buffer, encoding="utf-8", errors="replace")
+                if stream is sys.stdout:
+                    sys.stdout = wrapped
+                else:
+                    sys.stderr = wrapped
+        except Exception:
+            pass
+
+
+_ensure_utf8()
+
+
+def _create_console() -> Console:
+    import os
+
+    force_ascii = os.getenv("NOXLANG_ASCII", "").lower() in {"1", "true", "yes"}
+    if force_ascii:
+        return Console(legacy_windows=True, force_terminal=True, color_system="standard")
+
+    return Console(force_terminal=True, color_system="truecolor")
+
+
+console = _create_console()
+
+DEFAULT_GITHUB_USER = "devnexe-alt"
+LIBRARIES_DIRNAME = "Libraries"
+
+
+def run_source(source: str, base_dir: Path | None = None, current_file: Path | None = None) -> None:
+    tokens = Lexer(source).tokenize()
+    program = Parser(tokens).parse()
+    Interpreter(base_dir=base_dir, current_file=current_file).run(program)
+
+
+def _resolve_run_target(path: str) -> Path:
+    target = Path(path)
+    if target.is_dir():
+        main_file = target / "__main__.nox"
+        if main_file.exists():
+            return main_file
+        main_file = target / "main.nox"
+        if main_file.exists():
+            return main_file
+        main_file = target / "app.nox"
+        if main_file.exists():
+            return main_file
+        raise RuntimeError("Directory has no __main__.nox, main.nox, or app.nox")
+    return target
+
+
+def run_file(path: str) -> None:
+    file_path = _resolve_run_target(path)
+    source = file_path.read_text(encoding="utf-8")
+    run_source(source, base_dir=file_path.parent, current_file=file_path)
+
+
+def _format_error(source: str, line: int | None, column: int | None) -> tuple[str, str, str]:
+    if line is None or column is None:
+        return "", "", ""
+    lines = source.splitlines()
+    if line < 1 or line > len(lines):
+        return "", "", ""
+    text = lines[line - 1]
+    pointer = " " * max(column - 1, 0) + "^"
+    location = f"Line {line}, Col {column}"
+    return location, text, pointer
+
+
+def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
+    if line is None:
+        return [], 0
+    try:
+        source = Path(path).read_text(encoding="utf-8")
+    except Exception:
+        return [], 0
+    lines = source.splitlines()
+    if line < 1 or line > len(lines):
+        return [], 0
+    start = max(line - context - 1, 0)
+    end = min(line + context, len(lines))
+    snippet = [(idx + 1, lines[idx]) for idx in range(start, end)]
+    return snippet, start + 1
+
+
+def _render_code_block(lines: list[tuple[int, str]], highlight_line: int | None) -> Text:
+    import textwrap
+
+    text = Text(no_wrap=True, overflow="crop")
+    # Estimate available width inside the panel.
+    panel_padding = 4  # borders + left padding
+    prefix_width = 1 + 1 + 2 + 1  # marker + space + line_no(2) + space
+    available = max(console.width - panel_padding - prefix_width, 20)
+
+    for idx, (line_no, content) in enumerate(lines):
+        if idx > 0:
+            text.append("\n")
+
+        marker = "❱" if highlight_line == line_no else " "
+        line_no_text = f"{line_no:>2} "
+
+        # Truncate to available width to prevent ugly wraps on narrow terminals.
+        part = content
+        if len(part) > available:
+            part = part[: max(available - 1, 0)] + "…"
+
+        if highlight_line == line_no:
+            text.append(marker, style="red")
+            text.append(" ")
+            text.append(line_no_text, style="bold red")
+            text.append(part, style="bold")
+        else:
+            text.append(marker, style="dim")
+            text.append(" ")
+            text.append(line_no_text, style="dim")
+            text.append(part)
+    return text
+
+
+def _is_github_url(text: str) -> bool:
+    return "github.com/" in text.lower()
+
+
+def _normalize_repo_spec(spec: str) -> tuple[str, str]:
+    """Return (repo_url, repo_name)."""
+    cleaned = spec.strip()
+
+    if _is_github_url(cleaned):
+        if cleaned.startswith("github.com/"):
+            cleaned = "https://" + cleaned
+        if cleaned.startswith("http://github.com/"):
+            cleaned = cleaned.replace("http://", "https://", 1)
+        if cleaned.startswith("https://github.com/"):
+            repo_url = cleaned
+        else:
+            repo_url = cleaned
+    else:
+        if "/" in cleaned:
+            repo_url = f"https://github.com/{cleaned}"
+        else:
+            repo_url = f"https://github.com/{DEFAULT_GITHUB_USER}/{cleaned}"
+
+    if repo_url.endswith(".git"):
+        repo_url = repo_url[:-4]
+
+    repo_name = repo_url.rstrip("/").split("/")[-1]
+    return repo_url, repo_name
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _libraries_root() -> Path:
+    return _project_root() / LIBRARIES_DIRNAME
+
+
+def _package_install(spec: str) -> int:
+    import shutil
+    import urllib.request
+    import zipfile
+
+    repo_url, repo_name = _normalize_repo_spec(spec)
+    libs_root = _libraries_root()
+    libs_root.mkdir(parents=True, exist_ok=True)
+    target_dir = libs_root / repo_name
+    tmp_root = libs_root / ".tmp"
+    tmp_root.mkdir(parents=True, exist_ok=True)
+    tmp_path = tmp_root / repo_name
+
+    if target_dir.exists():
+        raise RuntimeError(f"Library already installed: {repo_name}")
+
+    if tmp_path.exists():
+        shutil.rmtree(tmp_path, ignore_errors=True)
+
+    # Download from GitHub (no git required)
+    zip_path = tmp_root / f"{repo_name}.zip"
+    zip_urls = [
+        repo_url.rstrip("/") + "/archive/refs/heads/main.zip",
+        repo_url.rstrip("/") + "/archive/refs/heads/master.zip",
+    ]
+
+    downloaded = False
+    for url in zip_urls:
+        try:
+            urllib.request.urlretrieve(url, zip_path)
+            downloaded = True
+            break
+        except Exception:
+            continue
+
+    if not downloaded:
+        raise RuntimeError("Failed to download repository (main/master not found)")
+
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(tmp_root)
+        extracted = next(tmp_root.glob(f"{repo_name}-*"), None)
+        if extracted is None or not extracted.exists():
+            raise RuntimeError("Failed to extract GitHub zip")
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
+        shutil.move(str(extracted), str(tmp_path))
+    finally:
+        if zip_path.exists():
+            zip_path.unlink(missing_ok=True)
+
+    nxinfo = tmp_path / ".nxinfo"
+    if not nxinfo.exists():
+        shutil.rmtree(tmp_path, ignore_errors=True)
+        raise RuntimeError("Not a Nox library: .nxinfo not found")
+
+    try:
+        shutil.move(str(tmp_path), str(target_dir))
+    finally:
+        if tmp_path.exists():
+            shutil.rmtree(tmp_path, ignore_errors=True)
+
+    git_dir = target_dir / ".git"
+    if git_dir.exists():
+        shutil.rmtree(git_dir, ignore_errors=True)
+
+    console.print(Text(f"Installed {repo_name} into {target_dir}", style="green"))
+    return 0
+
+
+def _package_list() -> int:
+    libs_root = _libraries_root()
+    if not libs_root.exists():
+        console.print(Text("No libraries installed.", style="yellow"))
+        return 0
+    items = [p.name for p in libs_root.iterdir() if p.is_dir()]
+    if not items:
+        console.print(Text("No libraries installed.", style="yellow"))
+        return 0
+    for name in sorted(items):
+        console.print(name)
+    return 0
+
+
+def _package_remove(name: str) -> int:
+    import shutil
+
+    libs_root = _libraries_root()
+    target_dir = libs_root / name
+    if not target_dir.exists():
+        raise RuntimeError(f"Library not found: {name}")
+    shutil.rmtree(target_dir)
+    console.print(Text(f"Removed {name}", style="green"))
+    return 0
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    import argparse
+    import contextlib
+    import io
+    import sys
+
+    parser = argparse.ArgumentParser(prog="nox", description="Run Nox .nox scripts")
+    subparsers = parser.add_subparsers(dest="command")
+    try:
+        subparsers.required = False
+    except Exception:
+        pass
+
+    run_parser = subparsers.add_parser("run", help="Run a .nox script or folder")
+    run_parser.add_argument("file", help="Path to .nox file or folder")
+
+    pkg_parser = subparsers.add_parser("package", help="Manage Nox libraries")
+    pkg_sub = pkg_parser.add_subparsers(dest="pkg_command")
+
+    pkg_install = pkg_sub.add_parser("install", help="Install a library from GitHub")
+    pkg_install.add_argument("spec", help="repo | user/repo | GitHub URL")
+
+    pkg_sub.add_parser("list", help="List installed libraries")
+
+    pkg_remove = pkg_sub.add_parser("remove", help="Remove an installed library")
+    pkg_remove.add_argument("name", help="Library name")
+
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    if raw_argv and raw_argv[0] not in {"run", "package"} and not raw_argv[0].startswith("-"):
+        raw_argv = ["run", *raw_argv]
+    args = parser.parse_args(raw_argv)
+
+    if args.command == "package":
+        try:
+            if args.pkg_command == "install":
+                return _package_install(args.spec)
+            if args.pkg_command == "list":
+                return _package_list()
+            if args.pkg_command == "remove":
+                return _package_remove(args.name)
+            raise RuntimeError("Unknown package command")
+        except Exception as exc:
+            console.print(Text(f"RuntimeError: {exc}", style="bold red"))
+            return 3
+
+    file_arg = args.file if args.command == "run" else None
+    if file_arg is None:
+        console.print(Text("RuntimeError: missing script path", style="bold red"))
+        return 3
+
+    output_buffer = io.StringIO()
+    resolved_path: Path | None = None
+
+    try:
+        resolved_path = _resolve_run_target(file_arg)
+        with contextlib.redirect_stdout(output_buffer):
+            run_file(file_arg)
+        sys.stdout.write(output_buffer.getvalue())
+        return 0
+    except KeyboardInterrupt:
+        return 0
+    except NoxSyntaxError as exc:
+        source_path = resolved_path if resolved_path is not None else Path(file_arg)
+        source = source_path.read_text(encoding="utf-8")
+        location, line_text, pointer = _format_error(source, exc.line, exc.column)
+        console.print(Text(f"SyntaxError: {exc}", style="bold red"))
+        if location:
+            console.print(Text(f"{source_path} — {location}", style="dim"))
+            console.print(Text(line_text, style="yellow"))
+            console.print(Text(pointer, style="bold red"))
+        return 2
+    except NoxRuntimeError as exc:
+        if exc.stack:
+            top = exc.stack[-1]
+            err_line = top.line if top.line is not None else exc.line
+            err_file = top.file or (str(resolved_path) if resolved_path is not None else file_arg)
+        else:
+            err_line = exc.line
+            err_file = str(resolved_path) if resolved_path is not None else file_arg
+
+        if err_file:
+            trace_header = Text("Error traceback", style="red")
+            line_no_text = err_line if err_line is not None else "?"
+            trace_text = Text(f"Error in {err_file} at line {line_no_text}", style="green")
+            panel_box = box.ASCII if console.legacy_windows else box.ROUNDED
+
+            snippet, _ = _format_code_snippet(err_file, err_line, context=3)
+            if snippet:
+                code_block = _render_code_block(snippet, err_line)
+                panel_body = Group(trace_text, code_block)
+            else:
+                panel_body = trace_text
+
+            console.print(
+                Panel(
+                    panel_body,
+                    border_style="red",
+                    box=panel_box,
+                    style="none",
+                    title=trace_header,
+                    title_align="left",
+                )
+            )
+
+        error_name = getattr(exc, "display_name", "RuntimeError")
+        console.print(Text(f"{error_name}: {exc}", style="bold red"))
+        return 3
+    except Exception as exc:
+        console.print(Text(f"Internal Error: {exc}", style="bold red"))
+        return 1

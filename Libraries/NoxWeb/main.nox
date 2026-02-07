@@ -1,0 +1,106 @@
+﻿# NoxWeb library
+
+config = {"static": "static", "templates": "templates"}
+
+class Web:
+    define init(self):
+        self.routes = []
+        self.static_dir = config["static"]
+        self.templates_dir = config["templates"]
+        self.logging = true
+
+    define route(self, method, path, handler=false):
+        if handler == false:
+            define decorator(fn):
+                self.routes.append({"method": method, "path": path, "handler": fn})
+                result fn
+            result decorator
+        self.routes.append({"method": method, "path": path, "handler": handler})
+        result self
+
+    define get(self, path, handler=false):
+        result self.route("GET", path, handler)
+
+    define post(self, path, handler=false):
+        result self.route("POST", path, handler)
+
+    define run(self, port=8080):
+        http.serve(self.routes, port, {"static": self.static_dir, "log": self.logging})
+
+    define static(self, path):
+        self.static_dir = path
+        config["static"] = path
+        result self
+
+    define templates(self, path):
+        self.templates_dir = path
+        config["templates"] = path
+        result self
+
+    define log(self, on=true):
+        self.logging = on
+        result self
+
+    define register(self, blueprint, prefix=""):
+        for r in blueprint.routes:
+            path = r["path"]
+            if prefix != "":
+                if path == "/":
+                    path = prefix
+                else:
+                    path = prefix + path
+            self.routes.append({"method": r["method"], "path": path, "handler": r["handler"]})
+        result self
+
+
+define web():
+    result Web()
+
+class Blueprint:
+    define init(self):
+        self.routes = []
+
+    define route(self, method, path, handler=false):
+        if handler == false:
+            define decorator(fn):
+                self.routes.append({"method": method, "path": path, "handler": fn})
+                result fn
+            result decorator
+        self.routes.append({"method": method, "path": path, "handler": handler})
+        result self
+
+    define get(self, path, handler=false):
+        result self.route("GET", path, handler)
+
+    define post(self, path, handler=false):
+        result self.route("POST", path, handler)
+
+define blueprint():
+    result Blueprint()
+
+# helpers
+
+define text(body, status=200):
+    result (status, body)
+
+
+define json(data, status=200):
+    result (status, data)
+
+
+define response(body, status=200, headers={}):
+    result (status, body, headers)
+
+define html(body, status=200):
+    result (status, body, {"Content-Type": "text/html; charset=utf-8"})
+
+define render_template(name, data={}):
+    path = name
+    if string.startswith(name, "/"):
+        path = name
+    else:
+        path = config["templates"] + "/" + name
+    text = fs.read(path)
+    for key in data:
+        text = string.replace(text, "{{" + key + "}}", data[key])
+    result html(text)

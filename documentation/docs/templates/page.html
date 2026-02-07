@@ -1,0 +1,69 @@
+﻿<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}} - Nox Docs</title>
+    <link rel="icon" href="/icon.png" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("nox_theme");
+          if (t === "light") {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-left">
+        <a class="topbar-brand" href="/">
+          <img class="topbar-logo" src="/icon.png" alt="Nox Docs" />
+        </a>
+        <div class="topbar-sub">{{subtitle}}</div>
+      </div>
+      <div class="topbar-right">
+        <div class="lang-switch" id="lang-switch">
+          <button class="lang-trigger" id="lang-trigger" type="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="lang-current" id="lang-current">EN</span>
+          </button>
+          <div class="lang-menu" id="lang-menu" role="listbox" aria-label="Language">
+            <button class="lang-def-item lang-item" data-lang="en" role="option" type="button">EN</button>
+            <button class="lang-item" data-lang="ru" role="option" type="button">RU</button>
+          </div>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle theme">
+          <span class="theme-dot"></span>
+          Theme
+        </button>
+      </div>
+    </header>
+    <div class="layout">
+      <aside class="sidebar">
+        <button class="sidebar-toggle sidebar-corner" id="sidebar-toggle" aria-label="Toggle sidebar">
+          <span class="bar"></span>
+          <span class="bar"></span>
+          <span class="bar"></span>
+        </button>
+        <nav class="nav" id="sidebar-nav">
+          {{nav}}
+        </nav>
+      </aside>
+      <main class="content" id="page-content">
+        <div class="hero" id="page-hero">
+          <h1>{{title}}</h1>
+          <p>{{tagline}}</p>
+        </div>
+        <div id="page-body">{{content}}</div>
+        <div class="pager" id="page-pager">
+          <a class="pager-btn" href="{{prev_href}}">&larr; {{prev_title}}</a>
+          <span></span>
+          <a class="pager-btn" href="{{next_href}}">{{next_title}} &rarr;</a>
+        </div>
+      </main>
+    </div>
+    <script src="/wiki.js"></script>
+  </body>
+</html>

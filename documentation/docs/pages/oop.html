@@ -1,0 +1,35 @@
+﻿<h1>OOP</h1>
+<h2>Classes</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>class Point:
+    define init(self, x, y):
+        self.x = x
+        self.y = y
+
+    define sum(self):
+        result self.x + self.y
+
+p = Point(2, 5)
+result p.sum()</code></pre>
+</div>
+<h2>Structs</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>struct User:
+    name: str
+    age: int
+
+user = User{name: "Ann", age: 20}
+user.name = "Bob"</code></pre>
+</div>
+<h2>Traits</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>trait Serializable:
+    define to_json(self):
+        result ""
+
+class Person:
+    implement Serializable</code></pre>
+</div>

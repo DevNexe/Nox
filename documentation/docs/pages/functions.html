@@ -1,0 +1,25 @@
+﻿<h1>Functions</h1>
+<h2>Define</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>define add(a, b=10):
+    result a + b
+
+add(2, 3)
+add(2)</code></pre>
+</div>
+<h2>Varargs</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>define sum_all(*xs):
+    total = 0
+    for x in xs:
+        total = total + x
+    result total</code></pre>
+</div>
+<h2>Lambda</h2>
+<div class="codeblock">
+  <button class="copy">Copy</button>
+  <pre><code>square = lambda x: x * x
+result square(5)</code></pre>
+</div>
