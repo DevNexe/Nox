@@ -82,6 +82,11 @@ class Continue(Stmt):
 
 
 @dataclass
+class Pass(Stmt):
+    pass
+
+
+@dataclass
 class AssignIndex(Stmt):
     target: Expr
     index: Expr
@@ -194,6 +199,14 @@ class ListLiteral(Expr):
 class Index(Expr):
     target: Expr
     index: Expr
+
+
+@dataclass
+class Slice(Expr):
+    target: Expr
+    start: Optional[Expr]
+    stop: Optional[Expr]
+    step: Optional[Expr] = None
 
 
 @dataclass

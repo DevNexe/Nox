@@ -14,10 +14,31 @@ meta_ru_tagline = fs.read("documentation/docs/pages/ru/_tagline.txt")
 pages_en = []
 pages_en = pages_en + [("/", "documentation/docs/pages/en/overview.md")]
 pages_en = pages_en + [("/getting-started", "documentation/docs/pages/en/getting-started.md")]
+pages_en = pages_en + [("/getting-started/setup", "documentation/docs/pages/en/getting-started/setup.md")]
+pages_en = pages_en + [("/getting-started/first-program", "documentation/docs/pages/en/getting-started/first-program.md")]
+pages_en = pages_en + [("/getting-started/patterns", "documentation/docs/pages/en/getting-started/patterns.md")]
 pages_en = pages_en + [("/syntax", "documentation/docs/pages/en/syntax.md")]
+pages_en = pages_en + [("/syntax/blocks", "documentation/docs/pages/en/syntax/blocks.md")]
+pages_en = pages_en + [("/syntax/comments", "documentation/docs/pages/en/syntax/comments.md")]
+pages_en = pages_en + [("/syntax/multiline-structures", "documentation/docs/pages/en/syntax/multiline-structures.md")]
+pages_en = pages_en + [("/syntax/pass-statement", "documentation/docs/pages/en/syntax/pass-statement.md")]
 pages_en = pages_en + [("/types", "documentation/docs/pages/en/types.md")]
+pages_en = pages_en + [("/types/numbers-and-strings", "documentation/docs/pages/en/types/numbers-and-strings.md")]
+pages_en = pages_en + [("/types/string-slicing", "documentation/docs/pages/en/types/string-slicing.md")]
+pages_en = pages_en + [("/types/indexing-and-collections", "documentation/docs/pages/en/types/indexing-and-collections.md")]
+pages_en = pages_en + [("/types/none-type", "documentation/docs/pages/en/types/none-type.md")]
 pages_en = pages_en + [("/control-flow", "documentation/docs/pages/en/control-flow.md")]
+pages_en = pages_en + [("/control-flow/if-else", "documentation/docs/pages/en/control-flow/if-else.md")]
+pages_en = pages_en + [("/control-flow/for-loops", "documentation/docs/pages/en/control-flow/for-loops.md")]
+pages_en = pages_en + [("/control-flow/repeat", "documentation/docs/pages/en/control-flow/repeat.md")]
+pages_en = pages_en + [("/control-flow/match", "documentation/docs/pages/en/control-flow/match.md")]
+pages_en = pages_en + [("/control-flow/pass-statement", "documentation/docs/pages/en/control-flow/pass-statement.md")]
 pages_en = pages_en + [("/functions", "documentation/docs/pages/en/functions.md")]
+pages_en = pages_en + [("/functions/define", "documentation/docs/pages/en/functions/define.md")]
+pages_en = pages_en + [("/functions/multiline-calls", "documentation/docs/pages/en/functions/multiline-calls.md")]
+pages_en = pages_en + [("/functions/lambda", "documentation/docs/pages/en/functions/lambda.md")]
+pages_en = pages_en + [("/functions/variadic", "documentation/docs/pages/en/functions/variadic.md")]
+pages_en = pages_en + [("/functions/returning-none", "documentation/docs/pages/en/functions/returning-none.md")]
 pages_en = pages_en + [("/oop", "documentation/docs/pages/en/oop.md")]
 pages_en = pages_en + [("/modules", "documentation/docs/pages/en/modules.md")]
 pages_en = pages_en + [("/errors", "documentation/docs/pages/en/errors.md")]
@@ -27,10 +48,31 @@ pages_en = pages_en + [("/noxweb", "documentation/docs/pages/en/noxweb.md")]
 pages_ru = []
 pages_ru = pages_ru + [("/", "documentation/docs/pages/ru/overview.md")]
 pages_ru = pages_ru + [("/getting-started", "documentation/docs/pages/ru/getting-started.md")]
+pages_ru = pages_ru + [("/getting-started/setup", "documentation/docs/pages/ru/getting-started/setup.md")]
+pages_ru = pages_ru + [("/getting-started/first-program", "documentation/docs/pages/ru/getting-started/first-program.md")]
+pages_ru = pages_ru + [("/getting-started/patterns", "documentation/docs/pages/ru/getting-started/patterns.md")]
 pages_ru = pages_ru + [("/syntax", "documentation/docs/pages/ru/syntax.md")]
+pages_ru = pages_ru + [("/syntax/blocks", "documentation/docs/pages/ru/syntax/blocks.md")]
+pages_ru = pages_ru + [("/syntax/comments", "documentation/docs/pages/ru/syntax/comments.md")]
+pages_ru = pages_ru + [("/syntax/multiline-structures", "documentation/docs/pages/ru/syntax/multiline-structures.md")]
+pages_ru = pages_ru + [("/syntax/pass-statement", "documentation/docs/pages/ru/syntax/pass-statement.md")]
 pages_ru = pages_ru + [("/types", "documentation/docs/pages/ru/types.md")]
+pages_ru = pages_ru + [("/types/numbers-and-strings", "documentation/docs/pages/ru/types/numbers-and-strings.md")]
+pages_ru = pages_ru + [("/types/string-slicing", "documentation/docs/pages/ru/types/string-slicing.md")]
+pages_ru = pages_ru + [("/types/indexing-and-collections", "documentation/docs/pages/ru/types/indexing-and-collections.md")]
+pages_ru = pages_ru + [("/types/none-type", "documentation/docs/pages/ru/types/none-type.md")]
 pages_ru = pages_ru + [("/control-flow", "documentation/docs/pages/ru/control-flow.md")]
+pages_ru = pages_ru + [("/control-flow/if-else", "documentation/docs/pages/ru/control-flow/if-else.md")]
+pages_ru = pages_ru + [("/control-flow/for-loops", "documentation/docs/pages/ru/control-flow/for-loops.md")]
+pages_ru = pages_ru + [("/control-flow/repeat", "documentation/docs/pages/ru/control-flow/repeat.md")]
+pages_ru = pages_ru + [("/control-flow/match", "documentation/docs/pages/ru/control-flow/match.md")]
+pages_ru = pages_ru + [("/control-flow/pass-statement", "documentation/docs/pages/ru/control-flow/pass-statement.md")]
 pages_ru = pages_ru + [("/functions", "documentation/docs/pages/ru/functions.md")]
+pages_ru = pages_ru + [("/functions/define", "documentation/docs/pages/ru/functions/define.md")]
+pages_ru = pages_ru + [("/functions/multiline-calls", "documentation/docs/pages/ru/functions/multiline-calls.md")]
+pages_ru = pages_ru + [("/functions/lambda", "documentation/docs/pages/ru/functions/lambda.md")]
+pages_ru = pages_ru + [("/functions/variadic", "documentation/docs/pages/ru/functions/variadic.md")]
+pages_ru = pages_ru + [("/functions/returning-none", "documentation/docs/pages/ru/functions/returning-none.md")]
 pages_ru = pages_ru + [("/oop", "documentation/docs/pages/ru/oop.md")]
 pages_ru = pages_ru + [("/modules", "documentation/docs/pages/ru/modules.md")]
 pages_ru = pages_ru + [("/errors", "documentation/docs/pages/ru/errors.md")]
@@ -207,10 +249,31 @@ define page_handler(req):
 # routes
 app.get("/", page_handler)
 app.get("/getting-started", page_handler)
+app.get("/getting-started/setup", page_handler)
+app.get("/getting-started/first-program", page_handler)
+app.get("/getting-started/patterns", page_handler)
 app.get("/syntax", page_handler)
+app.get("/syntax/blocks", page_handler)
+app.get("/syntax/comments", page_handler)
+app.get("/syntax/multiline-structures", page_handler)
+app.get("/syntax/pass-statement", page_handler)
 app.get("/types", page_handler)
+app.get("/types/numbers-and-strings", page_handler)
+app.get("/types/string-slicing", page_handler)
+app.get("/types/indexing-and-collections", page_handler)
+app.get("/types/none-type", page_handler)
 app.get("/control-flow", page_handler)
+app.get("/control-flow/if-else", page_handler)
+app.get("/control-flow/for-loops", page_handler)
+app.get("/control-flow/repeat", page_handler)
+app.get("/control-flow/match", page_handler)
+app.get("/control-flow/pass-statement", page_handler)
 app.get("/functions", page_handler)
+app.get("/functions/define", page_handler)
+app.get("/functions/multiline-calls", page_handler)
+app.get("/functions/lambda", page_handler)
+app.get("/functions/variadic", page_handler)
+app.get("/functions/returning-none", page_handler)
 app.get("/oop", page_handler)
 app.get("/modules", page_handler)
 app.get("/errors", page_handler)

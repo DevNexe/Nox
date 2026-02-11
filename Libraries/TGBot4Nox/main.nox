@@ -1,0 +1,218 @@
+# TGBot4Nox - lightweight Telegram bot toolkit for Nox
+
+
+class FSM:
+    define init(self):
+        self._state = {}
+
+    define set(self, key, value):
+        self._state[key] = value
+
+    define get(self, key):
+        try:
+            result self._state[key]
+        except:
+            result none
+
+    define clear(self, key):
+        try:
+            self._state[key] = none
+        except:
+            pass
+
+
+define filter_command(name):
+    define _f(ctx):
+        text = ctx["text"]
+        if text == none:
+            result false
+        result string.startswith(text, "/" + name)
+    result _f
+
+
+define filter_text_contains(part):
+    define _f(ctx):
+        text = ctx["text"]
+        if text == none:
+            result false
+        result string.startswith(text, part)
+    result _f
+
+
+class Bot:
+    define init(self, token):
+        self.token = token
+        self.middlewares = []
+        self.command_handlers = {}
+        self.message_handlers = []
+        self.filters = []
+        self.offset = 0
+        self.fsm = FSM()
+        self._self_id = none
+
+    define use(self, middleware):
+        self.middlewares = self.middlewares + [middleware]
+
+    define command(self, name, handler):
+        handlers = []
+        try:
+            handlers = self.command_handlers[name]
+        except:
+            handlers = []
+        handlers = handlers + [handler]
+        self.command_handlers[name] = handlers
+
+    define on_message(self, handler):
+        self.message_handlers = self.message_handlers + [handler]
+
+    define on_filter(self, filter_fn, handler):
+        self.filters = self.filters + [(filter_fn, handler)]
+
+    define state_set(self, chat_id, state):
+        self.fsm.set(chat_id, state)
+
+    define state_get(self, chat_id):
+        result self.fsm.get(chat_id)
+
+    define state_clear(self, chat_id):
+        self.fsm.clear(chat_id)
+
+    define _api(self, method):
+        result "https://api.telegram.org/bot" + self.token + "/" + method
+
+    define _ensure_self_id(self):
+        if self._self_id != none:
+            result
+        resp = http.post(self._api("getMe"), none, none, {})
+        data = none
+        try:
+            data = resp["json"]
+        except:
+            data = none
+        if data == none:
+            result
+        ok = false
+        try:
+            ok = data["ok"]
+        except:
+            ok = false
+        if not ok:
+            result
+        try:
+            self._self_id = data["result"]["id"]
+        except:
+            self._self_id = none
+
+    define _is_bot_message(self, msg):
+        if msg == none:
+            result false
+        try:
+            if msg["from"]["is_bot"] == true:
+                result true
+        except:
+            pass
+        try:
+            if self._self_id != none and msg["from"]["id"] == self._self_id:
+                result true
+        except:
+            pass
+        result false
+
+    define send_message(self, chat_id, text):
+        payload = {"chat_id": chat_id, "text": text}
+        result http.post(self._api("sendMessage"), none, none, payload)
+
+    define _get_updates(self, timeout):
+        payload = {"offset": self.offset, "timeout": timeout}
+        result http.post(self._api("getUpdates"), none, none, payload)
+
+    define _run_middlewares(self, ctx):
+        for mw in self.middlewares:
+            mw(ctx)
+
+    define _dispatch(self, update):
+        msg = none
+        text = none
+        chat_id = none
+
+        try:
+            msg = update["message"]
+            chat_id = msg["chat"]["id"]
+            text = msg["text"]
+        except:
+            pass
+
+        if self._is_bot_message(msg):
+            result
+
+        ctx = {
+            "bot": self,
+            "update": update,
+            "message": msg,
+            "text": text,
+            "chat_id": chat_id,
+            "state": self.state_get(chat_id),
+        }
+
+        self._run_middlewares(ctx)
+
+        if text != none and string.startswith(text, "/"):
+            cmd = text
+            cmd = string.replace(cmd, "/", "")
+            parts = string.split(cmd, " ")
+            cmd = parts[0]
+            handlers = []
+            try:
+                handlers = self.command_handlers[cmd]
+            except:
+                handlers = []
+            for h in handlers:
+                h(ctx)
+
+        for pair in self.filters:
+            try:
+                if pair[0](ctx):
+                    pair[1](ctx)
+            except:
+                pass
+
+        for h in self.message_handlers:
+            h(ctx)
+
+    define poll(self, interval_ms=700, timeout=20, max_batch=100):
+        self._ensure_self_id()
+        repeat true:
+            resp = self._get_updates(timeout)
+            data = none
+            try:
+                data = resp["json"]
+            except:
+                data = none
+
+            has_updates = false
+            if data != none:
+                ok = false
+                try:
+                    ok = data["ok"]
+                except:
+                    ok = false
+                if ok:
+                    updates = data["result"]
+                    count = 0
+                    for upd in updates:
+                        has_updates = true
+                        self.offset = upd["update_id"] + 1
+                        self._dispatch(upd)
+                        count = count + 1
+                        if count >= max_batch:
+                            break
+                        await sleep(0)
+
+            if has_updates:
+                await sleep(20)
+            else:
+                await sleep(interval_ms)
+
+
+define bot(token):
+    result Bot(token)

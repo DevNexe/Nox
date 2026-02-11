@@ -1,9 +1,14 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
+import threading
+import urllib.request
+import urllib.error
+import urllib.parse
+import json
 
 from .ast_nodes import (
     Assign,
@@ -18,6 +23,7 @@ from .ast_nodes import (
     StructDef,
     With,
     Continue,
+    Pass,
     Define,
     Param,
     Expr,
@@ -28,6 +34,7 @@ from .ast_nodes import (
     ImportFrom,
     ImportModule,
     Index,
+    Slice,
     ListLiteral,
     DictLiteral,
     SetLiteral,
@@ -210,6 +217,36 @@ class AsyncResult:
     value: Any
 
 
+class Task:
+    def __init__(self, worker: Callable[[], Any]) -> None:
+        self._done = threading.Event()
+        self._result: Any = None
+        self._error: Optional[BaseException] = None
+
+        def _run() -> None:
+            try:
+                self._result = worker()
+            except BaseException as exc:
+                self._error = exc
+            finally:
+                self._done.set()
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+
+    def done(self) -> bool:
+        return self._done.is_set()
+
+    def result(self, timeout_ms: Optional[int] = None) -> Any:
+        timeout = None if timeout_ms is None else timeout_ms / 1000.0
+        finished = self._done.wait(timeout)
+        if not finished:
+            raise RuntimeError("Task timeout")
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+
 @dataclass
 class StructType:
     name: str
@@ -285,6 +322,9 @@ class Interpreter:
             "range": self._builtin_range,
             "sleep": self._builtin_sleep,
             "open": self._builtin_open,
+            "create_task": self._builtin_create_task,
+            "gather": self._builtin_gather,
+            "run_async": self._builtin_run_async,
             "none": None,
         }
         self.env = Environment(values=dict(self.builtins))
@@ -390,6 +430,8 @@ class Interpreter:
             raise BreakSignal()
         if isinstance(stmt, Continue):
             raise ContinueSignal()
+        if isinstance(stmt, Pass):
+            return
         if isinstance(stmt, If):
             if self._truthy(self._eval(stmt.condition)):
                 self._exec_block(stmt.then_body)
@@ -544,6 +586,8 @@ class Interpreter:
             return func
         if isinstance(expr, Await):
             value = self._eval(expr.expr)
+            if isinstance(value, Task):
+                return value.result()
             if isinstance(value, AsyncResult):
                 return value.value
             return value
@@ -567,6 +611,12 @@ class Interpreter:
             target = self._eval(expr.target)
             index = self._eval(expr.index)
             return target[index]
+        if isinstance(expr, Slice):
+            target = self._eval(expr.target)
+            start = self._eval(expr.start) if expr.start is not None else None
+            stop = self._eval(expr.stop) if expr.stop is not None else None
+            step = self._eval(expr.step) if expr.step is not None else None
+            return target[start:stop:step]
         if isinstance(expr, GetAttr):
             target = self._eval(expr.target)
             if isinstance(target, Instance):
@@ -669,6 +719,132 @@ class Interpreter:
         if not isinstance(mode, str):
             raise RuntimeError("open expects a string mode")
         return open(path, mode, encoding="utf-8")
+
+    def _invoke_callable(self, target: Any, args: List[Any]) -> Any:
+        if isinstance(target, Function):
+            temp = Interpreter(base_dir=self.base_dir, module_cache=self.module_cache, current_file=self.current_file)
+            return target.call(temp, args)
+        if isinstance(target, BoundMethod):
+            temp = Interpreter(base_dir=self.base_dir, module_cache=self.module_cache, current_file=self.current_file)
+            return target.function.call(temp, [target.instance] + args)
+        if isinstance(target, Class):
+            temp = Interpreter(base_dir=self.base_dir, module_cache=self.module_cache, current_file=self.current_file)
+            return target.call(temp, args)
+        if callable(target):
+            return target(*args)
+        raise RuntimeError("Target is not callable")
+
+    def _builtin_create_task(self, target: Any, *args: Any) -> Task:
+        return Task(lambda: self._invoke_callable(target, list(args)))
+
+    def _builtin_gather(self, tasks: Any) -> AsyncResult:
+        if not isinstance(tasks, list):
+            raise RuntimeError("gather expects a list of tasks")
+        results = []
+        for task in tasks:
+            if isinstance(task, Task):
+                results.append(task.result())
+            elif isinstance(task, AsyncResult):
+                results.append(task.value)
+            else:
+                results.append(task)
+        return AsyncResult(results)
+
+    def _builtin_run_async(self, value: Any) -> Any:
+        if isinstance(value, Task):
+            return value.result()
+        if isinstance(value, AsyncResult):
+            return value.value
+        return value
+
+    def _builtin_http_request(
+        self,
+        method: Any,
+        url: Any,
+        headers: Any = None,
+        data: Any = None,
+        json_data: Any = None,
+        timeout: Any = 30,
+    ) -> Any:
+        if not isinstance(method, str):
+            raise RuntimeError("http.request expects string method")
+        if not isinstance(url, str):
+            raise RuntimeError("http.request expects string url")
+        if not isinstance(timeout, (int, float)):
+            raise RuntimeError("http.request expects numeric timeout")
+
+        req_headers: Dict[str, str] = {}
+        if headers is not None:
+            if not isinstance(headers, dict):
+                raise RuntimeError("http.request headers must be a dict")
+            req_headers = {str(k): str(v) for k, v in headers.items()}
+
+        body_bytes: Optional[bytes] = None
+        if json_data is not None:
+            body_bytes = json.dumps(json_data).encode("utf-8")
+            if "Content-Type" not in req_headers:
+                req_headers["Content-Type"] = "application/json"
+        elif data is not None:
+            if isinstance(data, bytes):
+                body_bytes = data
+            elif isinstance(data, str):
+                body_bytes = data.encode("utf-8")
+            elif isinstance(data, dict):
+                body_bytes = urllib.parse.urlencode({str(k): str(v) for k, v in data.items()}).encode("utf-8")
+                if "Content-Type" not in req_headers:
+                    req_headers["Content-Type"] = "application/x-www-form-urlencoded"
+            else:
+                body_bytes = str(data).encode("utf-8")
+
+        req = urllib.request.Request(url=url, data=body_bytes, method=method.upper(), headers=req_headers)
+        try:
+            with urllib.request.urlopen(req, timeout=float(timeout)) as resp:
+                raw = resp.read()
+                text = raw.decode("utf-8", errors="replace")
+                out = {
+                    "status": int(resp.status),
+                    "text": text,
+                    "headers": {k: v for (k, v) in resp.headers.items()},
+                    "json": None,
+                }
+                try:
+                    out["json"] = json.loads(text)
+                except Exception:
+                    pass
+                return out
+        except urllib.error.HTTPError as exc:
+            text = exc.read().decode("utf-8", errors="replace")
+            out = {
+                "status": int(exc.code),
+                "text": text,
+                "headers": {k: v for (k, v) in exc.headers.items()},
+                "json": None,
+            }
+            try:
+                out["json"] = json.loads(text)
+            except Exception:
+                pass
+            return out
+
+    def _builtin_http_get(self, url: Any, headers: Any = None, timeout: Any = 30) -> Any:
+        return self._builtin_http_request("GET", url, headers=headers, timeout=timeout)
+
+    def _builtin_http_post(
+        self,
+        url: Any,
+        headers: Any = None,
+        data: Any = None,
+        json_data: Any = None,
+        timeout: Any = 30,
+    ) -> Any:
+        return self._builtin_http_request(
+            "POST",
+            url,
+            headers=headers,
+            data=data,
+            json_data=json_data,
+            timeout=timeout,
+        )
 
     def _builtin_http_serve(self, routes: Any, port: Any = 8080, options: Any = None) -> None:
         import http.server
@@ -874,6 +1050,7 @@ class Interpreter:
         string_mod = _module(
             "string",
             {
+                "str": lambda v: str(v),
                 "split": lambda s, sep=None: s.split(sep),
                 "join": lambda items, sep="": sep.join(items),
                 "lower": lambda s: s.lower(),
@@ -920,6 +1097,19 @@ class Interpreter:
             "http",
             {
                 "serve": self._builtin_http_serve,
+                "request": self._builtin_http_request,
+                "get": self._builtin_http_get,
+                "post": self._builtin_http_post,
+            },
+        )
+
+        asyncio_mod = _module(
+            "asyncio",
+            {
+                "create_task": self._builtin_create_task,
+                "gather": self._builtin_gather,
+                "run": self._builtin_run_async,
+                "sleep": self._builtin_sleep,
             },
         )
 
@@ -930,6 +1120,7 @@ class Interpreter:
         self.env.set("fs", fs_mod)
         self.env.set("os", os_mod)
         self.env.set("http", http_mod)
+        self.env.set("asyncio", asyncio_mod)
 
     def _bind_args(self, params: List[Param], args: List[Any], env: Environment) -> Dict[str, Any]:
         bound: Dict[str, Any] = {}
@@ -1077,3 +1268,14 @@ class Interpreter:
             if path.exists():
                 return path
         return None
+
+
+
+
+
+
+
+
+
+
+

@@ -51,6 +51,7 @@ class Lexer:
         if source.startswith("\ufeff"):
             source = source.lstrip("\ufeff")
         self.source = source
+        self.bracket_depth = 0
 
     def tokenize(self) -> List[Token]:
         tokens: List[Token] = []
@@ -67,15 +68,17 @@ class Lexer:
                 continue
 
             indent = self._count_indent(raw_line, line_no)
-            if indent > indent_stack[-1]:
-                indent_stack.append(indent)
-                tokens.append(Token(TokenType.INDENT, None, line_no, 1))
-            elif indent < indent_stack[-1]:
-                while indent < indent_stack[-1]:
-                    indent_stack.pop()
-                    tokens.append(Token(TokenType.DEDENT, None, line_no, 1))
-                if indent != indent_stack[-1]:
-                    raise NoxSyntaxError("Indentation error", line_no, 1)
+            # Skip indent/dedent tracking when inside brackets
+            if self.bracket_depth == 0:
+                if indent > indent_stack[-1]:
+                    indent_stack.append(indent)
+                    tokens.append(Token(TokenType.INDENT, None, line_no, 1))
+                elif indent < indent_stack[-1]:
+                    while indent < indent_stack[-1]:
+                        indent_stack.pop()
+                        tokens.append(Token(TokenType.DEDENT, None, line_no, 1))
+                    if indent != indent_stack[-1]:
+                        raise NoxSyntaxError("Indentation error", line_no, 1)
 
             line_tokens, end_index, end_line_no, end_line_len = self._lex_line(lines, line_index, line_no, indent)
             tokens.extend(line_tokens)
@@ -259,26 +262,32 @@ class Lexer:
 
                 if ch == "(":
                     i += 1
+                    self.bracket_depth += 1
                     tokens.append(Token(TokenType.LPAREN, "(", current_line_no, col))
                     continue
                 if ch == ")":
                     i += 1
+                    self.bracket_depth = max(0, self.bracket_depth - 1)
                     tokens.append(Token(TokenType.RPAREN, ")", current_line_no, col))
                     continue
                 if ch == "{":
                     i += 1
+                    self.bracket_depth += 1
                     tokens.append(Token(TokenType.LBRACE, "{", current_line_no, col))
                     continue
                 if ch == "}":
                     i += 1
+                    self.bracket_depth = max(0, self.bracket_depth - 1)
                     tokens.append(Token(TokenType.RBRACE, "}", current_line_no, col))
                     continue
                 if ch == "[":
                     i += 1
+                    self.bracket_depth += 1
                     tokens.append(Token(TokenType.LBRACKET, "[", current_line_no, col))
                     continue
                 if ch == "]":
                     i += 1
+                    self.bracket_depth = max(0, self.bracket_depth - 1)
                     tokens.append(Token(TokenType.RBRACKET, "]", current_line_no, col))
                     continue
                 if ch == ":":

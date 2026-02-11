@@ -10,6 +10,7 @@ from .ast_nodes import (
     Call,
     Continue,
     Break,
+    Pass,
     ClassDef,
     TraitDef,
     Implement,
@@ -25,6 +26,7 @@ from .ast_nodes import (
     ImportFrom,
     ImportModule,
     Index,
+    Slice,
     ListLiteral,
     DictLiteral,
     SetLiteral,
@@ -52,6 +54,7 @@ class Parser:
     def __init__(self, tokens: List[Token]) -> None:
         self.tokens = tokens
         self.current = 0
+        self.bracket_depth = 0
 
     def parse(self) -> Program:
         statements: List[Stmt] = []
@@ -89,6 +92,8 @@ class Parser:
             return self._with_loc(Break(), self._previous())
         if self._match(TokenType.CONTINUE):
             return self._with_loc(Continue(), self._previous())
+        if self._match(TokenType.PASS):
+            return self._with_loc(Pass(), self._previous())
         if self._match(TokenType.TRY):
             return self._with_loc(self._try_stmt(), self._previous())
         if self._match(TokenType.IF):
@@ -117,33 +122,18 @@ class Parser:
                 values.append(self._expression())
             return self._with_loc(Print(values), self._previous())
 
-        if self._check(TokenType.IDENT):
-            if self._check_next(TokenType.EQ):
-                name = self._advance().value
-                self._consume(TokenType.EQ, "Expected '=' after identifier")
-                value = self._expression()
-                return self._with_loc(Assign(name, value), start_token)
-            if self._check_next(TokenType.LBRACKET):
-                target = Var(self._advance().value)
-                self._consume(TokenType.LBRACKET, "Expected '[' after identifier")
-                index = self._expression()
-                self._consume(TokenType.RBRACKET, "Expected ']' after index")
-                self._consume(TokenType.EQ, "Expected '=' after index assignment")
-                value = self._expression()
-                return self._with_loc(AssignIndex(target, index, value), start_token)
-            if (
-                self._check_next(TokenType.DOT)
-                and self._check_next_next(TokenType.IDENT)
-                and self._check_next_next_next(TokenType.EQ)
-            ):
-                target = Var(self._advance().value)
-                self._consume(TokenType.DOT, "Expected '.' after identifier")
-                name = self._consume(TokenType.IDENT, "Expected attribute name").value
-                self._consume(TokenType.EQ, "Expected '=' after attribute name")
-                value = self._expression()
-                return self._with_loc(AssignAttr(target, name, value), start_token)
-
         expr = self._expression()
+        if self._match(TokenType.EQ):
+            value = self._expression()
+            if isinstance(expr, Var):
+                return self._with_loc(Assign(expr.name, value), start_token)
+            if isinstance(expr, Index):
+                return self._with_loc(AssignIndex(expr.target, expr.index, value), start_token)
+            if isinstance(expr, GetAttr):
+                return self._with_loc(AssignAttr(expr.target, expr.name, value), start_token)
+            token = self._previous()
+            raise NoxSyntaxError("Invalid assignment target", token.line, token.column)
+
         return self._with_loc(ExprStmt(expr), start_token)
 
     def _import_stmt(self) -> Stmt:
@@ -389,54 +379,67 @@ class Parser:
         return self._or()
 
     def _or(self) -> Expr:
+        self._skip_newlines()
         expr = self._and()
         while self._match(TokenType.OR):
             op = self._previous().value
+            self._skip_newlines()
             right = self._and()
             expr = Binary(expr, op, right)
         return expr
 
     def _and(self) -> Expr:
+        self._skip_newlines()
         expr = self._equality()
         while self._match(TokenType.AND):
             op = self._previous().value
+            self._skip_newlines()
             right = self._equality()
             expr = Binary(expr, op, right)
         return expr
 
     def _equality(self) -> Expr:
+        self._skip_newlines()
         expr = self._comparison()
         while self._match(TokenType.EQEQ, TokenType.NEQ):
             op = self._previous().value
+            self._skip_newlines()
             right = self._comparison()
             expr = Binary(expr, op, right)
         return expr
 
     def _comparison(self) -> Expr:
+        self._skip_newlines()
         expr = self._term()
         while self._match(TokenType.LT, TokenType.LTE, TokenType.GT, TokenType.GTE):
             op = self._previous().value
+            self._skip_newlines()
             right = self._term()
             expr = Binary(expr, op, right)
         return expr
 
     def _term(self) -> Expr:
+        self._skip_newlines()
         expr = self._factor()
         while self._match(TokenType.PLUS, TokenType.MINUS):
             op = self._previous().value
+            self._skip_newlines()
             right = self._factor()
             expr = Binary(expr, op, right)
         return expr
 
     def _factor(self) -> Expr:
+        self._skip_newlines()
         expr = self._unary()
         while self._match(TokenType.STAR, TokenType.SLASH):
             op = self._previous().value
+            self._skip_newlines()
             right = self._unary()
             expr = Binary(expr, op, right)
         return expr
 
     def _unary(self) -> Expr:
+        self._skip_newlines()
         if self._match(TokenType.AWAIT):
             expr = self._unary()
             return Await(expr)
@@ -454,6 +457,8 @@ class Parser:
             return self._postfix(Literal(True))
         if self._match(TokenType.FALSE):
             return self._postfix(Literal(False))
+        if self._match(TokenType.NONE):
+            return self._postfix(Literal(None))
         if self._match(TokenType.IDENT):
             expr = Var(self._previous().value)
             return self._postfix(expr)
@@ -464,54 +469,81 @@ class Parser:
             expr = Var("len")
             return self._postfix(expr)
         if self._match(TokenType.LPAREN):
+            self.bracket_depth += 1
+            self._skip_newlines()
             if self._check(TokenType.RPAREN):
                 self._consume(TokenType.RPAREN, "Expected ')'")
+                self.bracket_depth -= 1
                 return self._postfix(TupleLiteral([]))
             expr = self._expression()
+            self._skip_newlines()
             if self._match(TokenType.COMMA):
                 items = [expr]
+                self._skip_newlines()
                 if not self._check(TokenType.RPAREN):
                     items.append(self._expression())
                     while self._match(TokenType.COMMA):
+                        self._skip_newlines()
                         if self._check(TokenType.RPAREN):
                             break
                         items.append(self._expression())
+                self._skip_newlines()
                 self._consume(TokenType.RPAREN, "Expected ')' after tuple")
+                self.bracket_depth -= 1
                 return self._postfix(TupleLiteral(items))
+            self._skip_newlines()
             self._consume(TokenType.RPAREN, "Expected ')' after expression")
+            self.bracket_depth -= 1
             return self._postfix(expr)
         if self._match(TokenType.LBRACE):
+            self.bracket_depth += 1
+            self._skip_newlines()
             if self._check(TokenType.RBRACE):
                 self._consume(TokenType.RBRACE, "Expected '}'")
+                self.bracket_depth -= 1
                 return self._postfix(DictLiteral([]))
             first = self._expression()
+            self._skip_newlines()
             if self._match(TokenType.COLON):
                 value = self._expression()
                 items = [(first, value)]
                 while self._match(TokenType.COMMA):
+                    self._skip_newlines()
                     if self._check(TokenType.RBRACE):
                         break
                     key = self._expression()
                     self._consume(TokenType.COLON, "Expected ':' after dict key")
-                    val = self._expression()
-                    items.append((key, val))
+                    value = self._expression()
+                    items.append((key, value))
+                self._skip_newlines()
                 self._consume(TokenType.RBRACE, "Expected '}' after dict")
+                self.bracket_depth -= 1
                 return self._postfix(DictLiteral(items))
             # set literal
             items = [first]
             while self._match(TokenType.COMMA):
+                self._skip_newlines()
                 if self._check(TokenType.RBRACE):
                     break
                 items.append(self._expression())
+            self._skip_newlines()
             self._consume(TokenType.RBRACE, "Expected '}' after set")
+            self.bracket_depth -= 1
             return self._postfix(SetLiteral(items))
         if self._match(TokenType.LBRACKET):
+            self.bracket_depth += 1
             items: List[Expr] = []
+            self._skip_newlines()
             if not self._check(TokenType.RBRACKET):
                 items.append(self._expression())
                 while self._match(TokenType.COMMA):
+                    self._skip_newlines()
+                    if self._check(TokenType.RBRACKET):
+                        break
                     items.append(self._expression())
+            self._skip_newlines()
             self._consume(TokenType.RBRACKET, "Expected ']' after list literal")
+            self.bracket_depth -= 1
             return self._postfix(ListLiteral(items))
         token = self._peek()
         raise NoxSyntaxError(f"Unexpected token {token.type}", token.line, token.column)
@@ -545,19 +577,67 @@ class Parser:
         while True:
             if self._match(TokenType.LPAREN):
                 token = self._previous()
+                self.bracket_depth += 1
                 args: List[Expr] = []
+                self._skip_newlines()
                 if not self._check(TokenType.RPAREN):
                     args.append(self._expression())
                     while self._match(TokenType.COMMA):
+                        self._skip_newlines()
+                        if self._check(TokenType.RPAREN):
+                            break
                         args.append(self._expression())
+                self._skip_newlines()
                 self._consume(TokenType.RPAREN, "Expected ')' after arguments")
+                self.bracket_depth -= 1
                 expr = self._with_expr_loc(Call(expr, args), token)
                 continue
             if self._match(TokenType.LBRACKET):
                 token = self._previous()
-                index = self._expression()
-                self._consume(TokenType.RBRACKET, "Expected ']' after index")
-                expr = self._with_expr_loc(Index(expr, index), token)
+                self.bracket_depth += 1
+                # Check if this is a slice or index
+                self._skip_newlines()
+                if self._check(TokenType.COLON):
+                    # Slice with no start, e.g., [:5] or [:]
+                    self._advance()  # consume the colon
+                    stop = None
+                    self._skip_newlines()
+                    if not self._check(TokenType.RBRACKET) and not self._check(TokenType.COLON):
+                        stop = self._expression()
+                    step = None
+                    if self._match(TokenType.COLON):
+                        self._skip_newlines()
+                        if not self._check(TokenType.RBRACKET):
+                            step = self._expression()
+                    self._skip_newlines()
+                    self._consume(TokenType.RBRACKET, "Expected ']' after slice")
+                    self.bracket_depth -= 1
+                    expr = self._with_expr_loc(Slice(expr, None, stop, step), token)
+                else:
+                    # Could be index or slice with start
+                    first = self._expression()
+                    self._skip_newlines()
+                    if self._match(TokenType.COLON):
+                        # It's a slice
+                        self._skip_newlines()
+                        stop = None
+                        if not self._check(TokenType.RBRACKET) and not self._check(TokenType.COLON):
+                            stop = self._expression()
+                        step = None
+                        if self._match(TokenType.COLON):
+                            self._skip_newlines()
+                            if not self._check(TokenType.RBRACKET):
+                                step = self._expression()
+                        self._skip_newlines()
+                        self._consume(TokenType.RBRACKET, "Expected ']' after slice")
+                        self.bracket_depth -= 1
+                        expr = self._with_expr_loc(Slice(expr, first, stop, step), token)
+                    else:
+                        # It's a simple index
+                        self._skip_newlines()
+                        self._consume(TokenType.RBRACKET, "Expected ']' after index")
+                        self.bracket_depth -= 1
+                        expr = self._with_expr_loc(Index(expr, first), token)
                 continue
             if self._match(TokenType.DOT):
                 token = self._previous()
@@ -566,22 +646,28 @@ class Parser:
                 continue
             if self._match(TokenType.LBRACE):
                 token = self._previous()
+                self.bracket_depth += 1
                 if not isinstance(expr, Var):
+                    self.bracket_depth -= 1
                     raise NoxSyntaxError("Struct literal must start with struct name", token.line, token.column)
                 fields: List[tuple[str, Expr]] = []
+                self._skip_newlines()
                 if not self._check(TokenType.RBRACE):
                     field_name = self._consume(TokenType.IDENT, "Expected field name").value
                     self._consume(TokenType.COLON, "Expected ':' after field name")
                     field_value = self._expression()
                     fields.append((field_name, field_value))
                     while self._match(TokenType.COMMA):
+                        self._skip_newlines()
                         if self._check(TokenType.RBRACE):
                             break
                         field_name = self._consume(TokenType.IDENT, "Expected field name").value
                         self._consume(TokenType.COLON, "Expected ':' after field name")
                         field_value = self._expression()
                         fields.append((field_name, field_value))
+                self._skip_newlines()
                 self._consume(TokenType.RBRACE, "Expected '}' after struct literal")
+                self.bracket_depth -= 1
                 expr = self._with_expr_loc(StructInit(expr.name, fields), token)
                 continue
             break
@@ -602,6 +688,12 @@ class Parser:
         while self._match(TokenType.DOT):
             parts.append(self._consume(TokenType.IDENT, "Expected identifier after '.'").value)
         return parts
+
+    def _skip_newlines(self) -> None:
+        """Skip NEWLINE tokens when inside brackets/parentheses."""
+        if self.bracket_depth > 0:
+            while self._check(TokenType.NEWLINE):
+                self._advance()
 
     def _with_loc(self, stmt: Stmt, token: Token) -> Stmt:
         setattr(stmt, "line", token.line)
@@ -649,3 +741,4 @@ class Parser:
 
     def _previous(self) -> Token:
         return self.tokens[self.current - 1]
+

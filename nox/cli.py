@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
@@ -9,10 +9,11 @@ from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
 
 from rich.console import Console
+from rich.console import Group
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.text import Text
 from rich import box
-from rich.console import Group
 
 def _ensure_utf8() -> None:
     import sys
@@ -46,7 +47,7 @@ _ensure_utf8()
 def _create_console() -> Console:
     import os
 
-    force_ascii = os.getenv("NOXLANG_ASCII", "").lower() in {"1", "true", "yes"}
+    force_ascii = os.getenv("Nox_ASCII", "").lower() in {"1", "true", "yes"}
     if force_ascii:
         return Console(legacy_windows=True, force_terminal=True, color_system="standard")
 
@@ -99,6 +100,23 @@ def _format_error(source: str, line: int | None, column: int | None) -> tuple[st
     return location, text, pointer
 
 
+def _print_error(title: str, message: str) -> None:
+    console.print(f"[bold red]{title}:[/bold red] {message}")
+
+
+def _print_error_location(path: str, location: str) -> None:
+    console.print(f"[dim]{path} - {location}[/dim]")
+
+
+def _print_error_trace_header(path: str, line: int | None, scope: str | None = None) -> None:
+    line_text = line if line is not None else "?"
+    console.print("[bold red]Traceback[/bold red] [dim](most recent call last)[/dim]")
+    if scope:
+        console.print(f"[bold]Error[/bold] [yellow]{path}[/yellow] in line [magenta]{line_text}[/magenta] in [green]{scope}[/green]")
+    else:
+        console.print(f"[bold]Error[/bold] [yellow]{path}[/yellow] in line [magenta]{line_text}[/magenta]")
+
+
 def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
     if line is None:
         return [], 0
@@ -116,30 +134,29 @@ def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple
 
 
 def _render_code_block(lines: list[tuple[int, str]], highlight_line: int | None) -> Text:
-    import textwrap
-
     text = Text(no_wrap=True, overflow="crop")
-    # Estimate available width inside the panel.
-    panel_padding = 4  # borders + left padding
-    prefix_width = 1 + 1 + 2 + 1  # marker + space + line_no(2) + space
+    # Keep snippets readable on narrow terminals.
+    panel_padding = 4
+    line_no_width = max(len(str(line_no)) for line_no, _ in lines) if lines else 2
+    prefix_width = 1 + 1 + line_no_width + 1  # marker + space + line_no + space
     available = max(console.width - panel_padding - prefix_width, 20)
 
     for idx, (line_no, content) in enumerate(lines):
         if idx > 0:
             text.append("\n")
 
-        marker = "❱" if highlight_line == line_no else " "
-        line_no_text = f"{line_no:>2} "
+        marker = ">" if highlight_line == line_no else " "
+        line_no_text = f"{line_no:>{line_no_width}} "
 
         # Truncate to available width to prevent ugly wraps on narrow terminals.
         part = content
         if len(part) > available:
-            part = part[: max(available - 1, 0)] + "…"
+            part = part[: max(available - 1, 0)] + "..."
 
         if highlight_line == line_no:
             text.append(marker, style="red")
             text.append(" ")
-            text.append(line_no_text, style="bold red")
+            text.append(line_no_text, style="bold white")
             text.append(part, style="bold")
         else:
             text.append(marker, style="dim")
@@ -147,6 +164,49 @@ def _render_code_block(lines: list[tuple[int, str]], highlight_line: int | None)
             text.append(line_no_text, style="dim")
             text.append(part)
     return text
+
+
+def _render_traceback_panel(
+    path: str,
+    line: int | None,
+    scope: str | None,
+    lines: list[tuple[int, str]],
+    highlight_line: int | None,
+) -> None:
+    line_text = str(line) if line is not None else "?"
+    header = Text()
+    header.append(path, style="yellow")
+    header.append(":")
+    header.append(line_text, style="magenta")
+    if scope:
+        header.append(" in ")
+        header.append(scope, style="green")
+
+    body_parts: list[object] = [header, Text("")]
+
+    if lines:
+        start_line = lines[0][0]
+        code = "\n".join(content for _, content in lines)
+        syntax = Syntax(
+            code,
+            "python",
+            theme="monokai",
+            line_numbers=True,
+            start_line=start_line,
+            highlight_lines=set(),
+            word_wrap=False,
+        )
+        body_parts.append(syntax)
+
+    panel = Panel(
+        Group(*body_parts),
+        title="[bold red]Traceback[/bold red]",
+        border_style="red",
+        box=box.ROUNDED,
+        expand=False,
+        padding=(0, 1),
+    )
+    console.print(panel)
 
 
 def _is_github_url(text: str) -> bool:
@@ -325,12 +385,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return _package_remove(args.name)
             raise RuntimeError("Unknown package command")
         except Exception as exc:
-            console.print(Text(f"RuntimeError: {exc}", style="bold red"))
+            _print_error("RuntimeError", str(exc))
             return 3
 
     file_arg = args.file if args.command == "run" else None
     if file_arg is None:
-        console.print(Text("RuntimeError: missing script path", style="bold red"))
+        _print_error("RuntimeError", "missing script path")
         return 3
 
     output_buffer = io.StringIO()
@@ -348,48 +408,32 @@ def main(argv: Optional[list[str]] = None) -> int:
         source_path = resolved_path if resolved_path is not None else Path(file_arg)
         source = source_path.read_text(encoding="utf-8")
         location, line_text, pointer = _format_error(source, exc.line, exc.column)
-        console.print(Text(f"SyntaxError: {exc}", style="bold red"))
+        _print_error("SyntaxError", str(exc))
         if location:
-            console.print(Text(f"{source_path} — {location}", style="dim"))
+            _print_error_location(str(source_path), location)
             console.print(Text(line_text, style="yellow"))
             console.print(Text(pointer, style="bold red"))
         return 2
     except NoxRuntimeError as exc:
+        err_scope: str | None = None
         if exc.stack:
             top = exc.stack[-1]
             err_line = top.line if top.line is not None else exc.line
             err_file = top.file or (str(resolved_path) if resolved_path is not None else file_arg)
+            err_scope = top.name
         else:
             err_line = exc.line
             err_file = str(resolved_path) if resolved_path is not None else file_arg
 
         if err_file:
-            trace_header = Text("Error traceback", style="red")
-            line_no_text = err_line if err_line is not None else "?"
-            trace_text = Text(f"Error in {err_file} at line {line_no_text}", style="green")
-            panel_box = box.ASCII if console.legacy_windows else box.ROUNDED
-
             snippet, _ = _format_code_snippet(err_file, err_line, context=3)
-            if snippet:
-                code_block = _render_code_block(snippet, err_line)
-                panel_body = Group(trace_text, code_block)
-            else:
-                panel_body = trace_text
-
-            console.print(
-                Panel(
-                    panel_body,
-                    border_style="red",
-                    box=panel_box,
-                    style="none",
-                    title=trace_header,
-                    title_align="left",
-                )
-            )
+            _render_traceback_panel(err_file, err_line, err_scope, snippet, err_line)
+            console.print()
 
         error_name = getattr(exc, "display_name", "RuntimeError")
-        console.print(Text(f"{error_name}: {exc}", style="bold red"))
+        _print_error(error_name, str(exc))
         return 3
     except Exception as exc:
-        console.print(Text(f"Internal Error: {exc}", style="bold red"))
+        _print_error("Internal Error", str(exc))
         return 1
+
