@@ -9,18 +9,13 @@ from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
 
 from rich.console import Console
-from rich.console import Group
-from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.text import Text
-from rich import box
 
 def _ensure_utf8() -> None:
     import sys
     import io
     import os
 
-    # Force UTF-8 for the current process I/O
     os.environ["PYTHONIOENCODING"] = "utf-8"
 
     for stream in (sys.stdout, sys.stderr):
@@ -88,35 +83,6 @@ def run_file(path: str) -> None:
     run_source(source, base_dir=file_path.parent, current_file=file_path)
 
 
-def _format_error(source: str, line: int | None, column: int | None) -> tuple[str, str, str]:
-    if line is None or column is None:
-        return "", "", ""
-    lines = source.splitlines()
-    if line < 1 or line > len(lines):
-        return "", "", ""
-    text = lines[line - 1]
-    pointer = " " * max(column - 1, 0) + "^"
-    location = f"Line {line}, Col {column}"
-    return location, text, pointer
-
-
-def _print_error(title: str, message: str) -> None:
-    console.print(f"[bold red]{title}:[/bold red] {message}")
-
-
-def _print_error_location(path: str, location: str) -> None:
-    console.print(f"[dim]{path} - {location}[/dim]")
-
-
-def _print_error_trace_header(path: str, line: int | None, scope: str | None = None) -> None:
-    line_text = line if line is not None else "?"
-    console.print("[bold red]Traceback[/bold red] [dim](most recent call last)[/dim]")
-    if scope:
-        console.print(f"[bold]Error[/bold] [yellow]{path}[/yellow] in line [magenta]{line_text}[/magenta] in [green]{scope}[/green]")
-    else:
-        console.print(f"[bold]Error[/bold] [yellow]{path}[/yellow] in line [magenta]{line_text}[/magenta]")
-
-
 def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
     if line is None:
         return [], 0
@@ -133,39 +99,6 @@ def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple
     return snippet, start + 1
 
 
-def _render_code_block(lines: list[tuple[int, str]], highlight_line: int | None) -> Text:
-    text = Text(no_wrap=True, overflow="crop")
-    # Keep snippets readable on narrow terminals.
-    panel_padding = 4
-    line_no_width = max(len(str(line_no)) for line_no, _ in lines) if lines else 2
-    prefix_width = 1 + 1 + line_no_width + 1  # marker + space + line_no + space
-    available = max(console.width - panel_padding - prefix_width, 20)
-
-    for idx, (line_no, content) in enumerate(lines):
-        if idx > 0:
-            text.append("\n")
-
-        marker = ">" if highlight_line == line_no else " "
-        line_no_text = f"{line_no:>{line_no_width}} "
-
-        # Truncate to available width to prevent ugly wraps on narrow terminals.
-        part = content
-        if len(part) > available:
-            part = part[: max(available - 1, 0)] + "..."
-
-        if highlight_line == line_no:
-            text.append(marker, style="red")
-            text.append(" ")
-            text.append(line_no_text, style="bold white")
-            text.append(part, style="bold")
-        else:
-            text.append(marker, style="dim")
-            text.append(" ")
-            text.append(line_no_text, style="dim")
-            text.append(part)
-    return text
-
-
 def _render_traceback_panel(
     path: str,
     line: int | None,
@@ -174,39 +107,39 @@ def _render_traceback_panel(
     highlight_line: int | None,
 ) -> None:
     line_text = str(line) if line is not None else "?"
+
+    # "Error in <file> in line <number>" [in <scope>]
     header = Text()
+    header.append("Error", style="bold red")
+    header.append(" in ")
     header.append(path, style="yellow")
-    header.append(":")
+    header.append(" at line ")
     header.append(line_text, style="magenta")
-    if scope:
+    if scope and scope != "<module>":
         header.append(" in ")
         header.append(scope, style="green")
 
-    body_parts: list[object] = [header, Text("")]
-
+    console.print("[bold red]Traceback:[/bold red]")
+    indented_header = Text("  ")
+    indented_header.append_text(header)
+    indented_header.append(":")
+    console.print(indented_header)
     if lines:
-        start_line = lines[0][0]
-        code = "\n".join(content for _, content in lines)
-        syntax = Syntax(
-            code,
-            "python",
-            theme="monokai",
-            line_numbers=True,
-            start_line=start_line,
-            highlight_lines=set(),
-            word_wrap=False,
-        )
-        body_parts.append(syntax)
+        for ln, content in lines:
+            is_err = (ln == highlight_line)
+            marker = "❱" if is_err else " "
+            row = Text()
+            if is_err:
+                row.append(f"    {marker} {ln}", style="bold red")
+                row.append(f" {content}", style="bold")
+            else:
+                row.append(f"    {marker} {ln}", style="dim")
+                row.append(f" {content}")
+            console.print(row)
 
-    panel = Panel(
-        Group(*body_parts),
-        title="[bold red]Traceback[/bold red]",
-        border_style="red",
-        box=box.ROUNDED,
-        expand=False,
-        padding=(0, 1),
-    )
-    console.print(panel)
+
+def _print_error(title: str, message: str) -> None:
+    console.print(f"[bold red]{title}:[/bold red] {message}")
 
 
 def _is_github_url(text: str) -> bool:
@@ -266,7 +199,6 @@ def _package_install(spec: str) -> int:
     if tmp_path.exists():
         shutil.rmtree(tmp_path, ignore_errors=True)
 
-    # Download from GitHub (no git required)
     zip_path = tmp_root / f"{repo_name}.zip"
     zip_urls = [
         repo_url.rstrip("/") + "/archive/refs/heads/main.zip",
@@ -407,12 +339,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     except NoxSyntaxError as exc:
         source_path = resolved_path if resolved_path is not None else Path(file_arg)
         source = source_path.read_text(encoding="utf-8")
-        location, line_text, pointer = _format_error(source, exc.line, exc.column)
+        lines = source.splitlines()
+        err_line = exc.line
+        snippet, _ = _format_code_snippet(str(source_path), err_line, context=3)
+        _render_traceback_panel(str(source_path), err_line, None, snippet, err_line)
+        console.print()
         _print_error("SyntaxError", str(exc))
-        if location:
-            _print_error_location(str(source_path), location)
-            console.print(Text(line_text, style="yellow"))
-            console.print(Text(pointer, style="bold red"))
         return 2
     except NoxRuntimeError as exc:
         err_scope: str | None = None
@@ -433,7 +365,13 @@ def main(argv: Optional[list[str]] = None) -> int:
         error_name = getattr(exc, "display_name", "RuntimeError")
         _print_error(error_name, str(exc))
         return 3
+    except FileNotFoundError as exc:
+        # Strip the [Errno 2] prefix from the message
+        msg = str(exc)
+        import re
+        msg = re.sub(r"^\[Errno \d+\]\s*", "", msg)
+        _print_error("Primision Error", msg)
+        return 3
     except Exception as exc:
         _print_error("Internal Error", str(exc))
         return 1
-
