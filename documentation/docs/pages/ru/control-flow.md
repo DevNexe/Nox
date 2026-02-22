@@ -90,6 +90,26 @@ match status:
         pass
 ```
 
+## try / except / finally
+
+```
+try:
+    value = items[10]
+except:
+    display("fallback")
+finally:
+    display("done")
+```
+
+## with
+
+`with` привязывает ресурс к имени в блоке. Если у ресурса есть `close()`, он будет вызван автоматически.
+
+```
+with open("app.log", "r") as f:
+    text = f.read()
+```
+
 ## Вложенные условия с многострочными данными
 
 ```

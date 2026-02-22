@@ -33,17 +33,22 @@ pages_en = pages_en + [("/control-flow/for-loops", "documentation/docs/pages/en/
 pages_en = pages_en + [("/control-flow/repeat", "documentation/docs/pages/en/control-flow/repeat.md")]
 pages_en = pages_en + [("/control-flow/match", "documentation/docs/pages/en/control-flow/match.md")]
 pages_en = pages_en + [("/control-flow/pass-statement", "documentation/docs/pages/en/control-flow/pass-statement.md")]
+pages_en = pages_en + [("/control-flow/try-except-finally", "documentation/docs/pages/en/control-flow/try-except-finally.md")]
+pages_en = pages_en + [("/control-flow/with", "documentation/docs/pages/en/control-flow/with.md")]
 pages_en = pages_en + [("/functions", "documentation/docs/pages/en/functions.md")]
 pages_en = pages_en + [("/functions/define", "documentation/docs/pages/en/functions/define.md")]
 pages_en = pages_en + [("/functions/multiline-calls", "documentation/docs/pages/en/functions/multiline-calls.md")]
 pages_en = pages_en + [("/functions/lambda", "documentation/docs/pages/en/functions/lambda.md")]
 pages_en = pages_en + [("/functions/variadic", "documentation/docs/pages/en/functions/variadic.md")]
 pages_en = pages_en + [("/functions/returning-none", "documentation/docs/pages/en/functions/returning-none.md")]
+pages_en = pages_en + [("/functions/decorators", "documentation/docs/pages/en/functions/decorators.md")]
+pages_en = pages_en + [("/functions/async-await", "documentation/docs/pages/en/functions/async-await.md")]
 pages_en = pages_en + [("/oop", "documentation/docs/pages/en/oop.md")]
 pages_en = pages_en + [("/modules", "documentation/docs/pages/en/modules.md")]
 pages_en = pages_en + [("/errors", "documentation/docs/pages/en/errors.md")]
 pages_en = pages_en + [("/stdlib", "documentation/docs/pages/en/stdlib.md")]
 pages_en = pages_en + [("/noxweb", "documentation/docs/pages/en/noxweb.md")]
+pages_en = pages_en + [("/noxgram", "documentation/docs/pages/en/noxgram.md")]
 
 pages_ru = []
 pages_ru = pages_ru + [("/", "documentation/docs/pages/ru/overview.md")]
@@ -67,17 +72,22 @@ pages_ru = pages_ru + [("/control-flow/for-loops", "documentation/docs/pages/ru/
 pages_ru = pages_ru + [("/control-flow/repeat", "documentation/docs/pages/ru/control-flow/repeat.md")]
 pages_ru = pages_ru + [("/control-flow/match", "documentation/docs/pages/ru/control-flow/match.md")]
 pages_ru = pages_ru + [("/control-flow/pass-statement", "documentation/docs/pages/ru/control-flow/pass-statement.md")]
+pages_ru = pages_ru + [("/control-flow/try-except-finally", "documentation/docs/pages/ru/control-flow/try-except-finally.md")]
+pages_ru = pages_ru + [("/control-flow/with", "documentation/docs/pages/ru/control-flow/with.md")]
 pages_ru = pages_ru + [("/functions", "documentation/docs/pages/ru/functions.md")]
 pages_ru = pages_ru + [("/functions/define", "documentation/docs/pages/ru/functions/define.md")]
 pages_ru = pages_ru + [("/functions/multiline-calls", "documentation/docs/pages/ru/functions/multiline-calls.md")]
 pages_ru = pages_ru + [("/functions/lambda", "documentation/docs/pages/ru/functions/lambda.md")]
 pages_ru = pages_ru + [("/functions/variadic", "documentation/docs/pages/ru/functions/variadic.md")]
 pages_ru = pages_ru + [("/functions/returning-none", "documentation/docs/pages/ru/functions/returning-none.md")]
+pages_ru = pages_ru + [("/functions/decorators", "documentation/docs/pages/ru/functions/decorators.md")]
+pages_ru = pages_ru + [("/functions/async-await", "documentation/docs/pages/ru/functions/async-await.md")]
 pages_ru = pages_ru + [("/oop", "documentation/docs/pages/ru/oop.md")]
 pages_ru = pages_ru + [("/modules", "documentation/docs/pages/ru/modules.md")]
 pages_ru = pages_ru + [("/errors", "documentation/docs/pages/ru/errors.md")]
 pages_ru = pages_ru + [("/stdlib", "documentation/docs/pages/ru/stdlib.md")]
 pages_ru = pages_ru + [("/noxweb", "documentation/docs/pages/ru/noxweb.md")]
+pages_ru = pages_ru + [("/noxgram", "documentation/docs/pages/ru/noxgram.md")]
 
 # helpers
 
@@ -268,16 +278,21 @@ app.get("/control-flow/for-loops", page_handler)
 app.get("/control-flow/repeat", page_handler)
 app.get("/control-flow/match", page_handler)
 app.get("/control-flow/pass-statement", page_handler)
+app.get("/control-flow/try-except-finally", page_handler)
+app.get("/control-flow/with", page_handler)
 app.get("/functions", page_handler)
 app.get("/functions/define", page_handler)
 app.get("/functions/multiline-calls", page_handler)
 app.get("/functions/lambda", page_handler)
 app.get("/functions/variadic", page_handler)
 app.get("/functions/returning-none", page_handler)
+app.get("/functions/decorators", page_handler)
+app.get("/functions/async-await", page_handler)
 app.get("/oop", page_handler)
 app.get("/modules", page_handler)
 app.get("/errors", page_handler)
 app.get("/stdlib", page_handler)
 app.get("/noxweb", page_handler)
+app.get("/noxgram", page_handler)
 
 app.run(8080)

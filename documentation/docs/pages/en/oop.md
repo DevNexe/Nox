@@ -12,10 +12,40 @@ class Point:
         result self.x + self.y
 
 p = Point(2, 5)
-result p.sum()
+display(p.sum())
+```
+
+## Inheritance
+
+```
+class Animal:
+    define speak(self):
+        result "..."
+
+class Dog(Animal):
+    define speak(self):
+        result "woof"
+```
+
+## Traits
+
+Traits define required method names. `implement` is validated when the class is created.
+
+```
+trait Serializable:
+    define to_json(self):
+        pass
+
+class User:
+    implement Serializable
+
+    define to_json(self):
+        result "{}"
 ```
 
 ## Structs
+
+Struct fields are fixed by declaration.
 
 ```
 struct User:
@@ -24,15 +54,4 @@ struct User:
 
 user = User{name: "Ann", age: 20}
 user.name = "Bob"
-```
-
-## Traits
-
-```
-trait Serializable:
-    define to_json(self):
-        result ""
-
-class Person:
-    implement Serializable
 ```

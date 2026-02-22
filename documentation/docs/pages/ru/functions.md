@@ -59,6 +59,31 @@ data = {
 }
 ```
 
+## Декораторы
+
+```
+define logger(fn):
+    define wrapped(*args):
+        display("call", fn)
+        result fn(*args)
+    result wrapped
+
+@logger
+define greet(name):
+    result "Привет, " + name
+```
+
+## Async и await
+
+```
+async define ping(delay_ms):
+    await sleep(delay_ms)
+    result "ok"
+
+task = create_task(ping, 50)
+result = run_async(gather([task]))
+```
+
 ## Функции с опциональными параметрами
 
 ```

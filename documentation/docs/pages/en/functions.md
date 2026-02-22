@@ -10,30 +10,6 @@ add(2, 3)
 add(2)
 ```
 
-## Multiline Function Calls
-
-Function arguments can span multiple lines for better readability:
-
-```
-define process_data(data, filters, options, verbose):
-    if verbose == none:
-        pass
-    result data
-
-result = process_data(
-    user_data,
-    [
-        "active",
-        "verified"
-    ],
-    {
-        "timeout": 30,
-        "retries": 3
-    },
-    true
-)
-```
-
 ## Varargs
 
 ```
@@ -50,31 +26,47 @@ sum_all(1, 2, 3, 4, 5)
 
 ```
 square = lambda x: x * x
-result square(5)
-
-# Multiline structures with lambda
-data = {
-    "square": lambda x: x * x,
-    "values": [1, 2, 3, 4, 5]
-}
+display(square(5))
 ```
 
-## Functions with Optional Parameters
+## Decorators
 
 ```
-define greet(name, greeting="Hello"):
-    if name == none:
-        pass
-    else:
-        display(greeting + ", " + name)
+define logger(fn):
+    define wrapped(*args):
+        display("call", fn)
+        result fn(*args)
+    result wrapped
 
-greet("Alice")
-greet("Bob", "Hi")
+@logger
+define greet(name):
+    result "Hello, " + name
 ```
 
-## Returning None
+## Async functions and await
 
-Functions can return `none` to indicate no value:
+```
+async define ping(delay_ms):
+    await sleep(delay_ms)
+    result "ok"
+
+define main():
+    task = create_task(ping, 50)
+    result run_async(gather([task]))
+```
+
+## Multiline calls
+
+```
+result = process_data(
+    user_data,
+    ["active", "verified"],
+    {"timeout": 30},
+    true
+)
+```
+
+## Returning none
 
 ```
 define find_item(items, target):
@@ -82,9 +74,4 @@ define find_item(items, target):
         if item == target:
             result item
     result none
-
-result = find_item(
-    [1, 2, 3, 4, 5],
-    10
-)
 ```

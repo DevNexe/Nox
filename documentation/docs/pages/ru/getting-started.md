@@ -57,7 +57,7 @@ display(text[3:])       # Lang
 
 ```
 define greet(first_name, last_name, age):
-    result first_name + " " + last_name + " is " + display(age)
+    result first_name + " " + last_name + " is " + string.str(age)
 
 name = greet(
     "John",

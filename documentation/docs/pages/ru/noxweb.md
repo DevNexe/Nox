@@ -16,6 +16,12 @@ define home(req):
 app.run(8080)
 ```
 
+Если у вас отсутствует эта библиотека запустите команду:
+
+```
+nox package install NoxWeb
+```
+
 ## Blueprints
 
 ```

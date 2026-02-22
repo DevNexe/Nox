@@ -69,6 +69,39 @@ def _libraries_root() -> Path:
     return _exe_dir() / LIBRARIES_DIRNAME
 
 
+def _read_version_from_info_cfg() -> str:
+    candidates = [
+        Path(__file__).resolve().parent / "info.cfg",
+        _exe_dir() / "nox" / "info.cfg",
+        _exe_dir() / "info.cfg",
+    ]
+
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or line.startswith(";"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+            elif ":" in line:
+                key, value = line.split(":", 1)
+            else:
+                continue
+            if key.strip().lower() == "version":
+                parsed = value.strip().strip("'\"")
+                if parsed:
+                    return parsed
+
+    return "unknown"
+
+
 def run_source(source: str, base_dir: Path | None = None, current_file: Path | None = None) -> None:
     tokens = Lexer(source).tokenize()
     program = Parser(tokens).parse()
@@ -294,6 +327,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     original_cwd = Path.cwd()
 
     parser = argparse.ArgumentParser(prog="nox", description="Run Nox .nox scripts")
+    parser.add_argument("-V", "--version", action="store_true", help="Show Nox version and exit")
     subparsers = parser.add_subparsers(dest="command")
     try:
         subparsers.required = False
@@ -318,6 +352,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if raw_argv and raw_argv[0] not in {"run", "package"} and not raw_argv[0].startswith("-"):
         raw_argv = ["run", *raw_argv]
     args = parser.parse_args(raw_argv)
+
+    if args.version:
+        console.print(_read_version_from_info_cfg())
+        return 0
 
     if args.command is None:
         parser.print_usage()
