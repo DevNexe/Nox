@@ -254,14 +254,14 @@ Supports GET/POST routes, blueprints, static file serving, and template renderin
 
 ---
 
-## TGBot4Nox
+## NoxGram
 
 Build Telegram bots in Nox:
 
 ```
-connect TGBot4Nox
+connect NoxGram
 
-b = TGBot4Nox.bot("YOUR_TOKEN")
+b = NoxGram.bot("YOUR_TOKEN")
 
 b.command("start", define handler(ctx):
     ctx["bot"].send_message(ctx["chat_id"], "Hello!")
