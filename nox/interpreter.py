@@ -347,6 +347,28 @@ class Interpreter:
         for stmt in program.statements:
             self._exec_with_loc(stmt)
 
+    def _resolve_fs_path(self, path: str) -> Path:
+        p = Path(path)
+        if p.is_absolute():
+            return p
+        # Сначала ищем относительно папки скрипта
+        if self.base_dir:
+            candidate = self.base_dir / p
+            if candidate.exists():
+                return candidate
+        # Фоллбек: рядом с exe или рядом с проектом
+        exe = Path(sys.argv[0]).resolve()
+        if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
+            candidate = exe.parent / p
+        else:
+            candidate = Path(__file__).resolve().parent.parent / p
+        if candidate.exists():
+            return candidate
+        # Нигде не нашли — возвращаем base_dir путь чтобы ошибка была читаемой
+        if self.base_dir:
+            return self.base_dir / p
+        return p
+
     def _exec(self, stmt: Stmt) -> None:
         if isinstance(stmt, Assign):
             value = self._eval(stmt.value)
@@ -861,7 +883,6 @@ class Interpreter:
         import socketserver
         import sys as _sys
         from urllib.parse import urlparse, parse_qs
-        from pathlib import Path as _Path
 
         if not isinstance(port, int):
             raise RuntimeError("http.serve expects integer port")
@@ -888,7 +909,7 @@ class Interpreter:
 
         static_root = None
         if isinstance(static_dir, str) and static_dir.strip():
-            static_root = _Path(static_dir)
+            static_root = self._resolve_fs_path(static_dir).resolve()
 
         def _match(method: str, path: str) -> tuple[Any, dict]:
             parts = [p for p in path.strip("/").split("/") if p != ""]
@@ -1088,9 +1109,9 @@ class Interpreter:
         fs_mod = _module(
             "fs",
             {
-                "read": lambda path: Path(path).read_text(encoding="utf-8"),
-                "write": lambda path, text: Path(path).write_text(str(text), encoding="utf-8"),
-                "exists": lambda path: Path(path).exists(),
+                "read":   lambda path: self._resolve_fs_path(path).read_text(encoding="utf-8"),
+                "write":  lambda path, text: self._resolve_fs_path(path).write_text(str(text), encoding="utf-8"),
+                "exists": lambda path: self._resolve_fs_path(path).exists(),
             },
         )
 

@@ -7,7 +7,7 @@ from .lexer import Lexer
 from .parser import Parser
 from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
-
+import sys
 from rich.console import Console
 from rich.text import Text
 
@@ -74,19 +74,32 @@ def run_source(source: str, base_dir: Path | None = None, current_file: Path | N
     program = Parser(tokens).parse()
     Interpreter(base_dir=base_dir, current_file=current_file).run(program)
 
-
 def _resolve_run_target(path: str, cwd: Optional[Path] = None) -> Path:
     base = cwd or Path.cwd()
     target = Path(path)
     if not target.is_absolute():
         target = base / path
+
+    # Если не нашли в cwd — ищем рядом с exe/скриптом (та же логика что в _get_libraries_root)
+    if not target.exists():
+        exe = Path(sys.argv[0]).resolve()
+        if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
+            alt = exe.parent / path
+        else:
+            alt = Path(__file__).resolve().parent.parent / path
+        if alt.exists():
+            target = alt
+
     if target.is_dir():
         for name in ("__main__.nox", "main.nox", "app.nox"):
             if (target / name).exists():
                 return target / name
         raise RuntimeError("Directory has no __main__.nox, main.nox, or app.nox")
-    return target
 
+    if not target.exists():
+        raise FileNotFoundError(f"No such file or directory: '{path}'")
+
+    return target
 
 def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
     if line is None:
@@ -373,7 +386,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         msg = str(exc)
         import re
         msg = re.sub(r"^\[Errno \d+\]\s*", "", msg)
-        _print_error("Primision Error", msg)
+        _print_error("Permission Error", msg)
         return 3
     except Exception as exc:
         _print_error("Internal Error", str(exc))

@@ -1,0 +1,6 @@
+﻿# testlib
+
+define greet(name):
+    result "Hello, " + name
+
+value = 123
