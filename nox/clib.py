@@ -157,10 +157,25 @@ class CLib:
 
     def get(self, attr: str) -> Any:
         try:
-            return getattr(self._lib, attr)
+            fn = getattr(self._lib, attr)
         except AttributeError:
             raise RuntimeError(f"C library '{self._name}' has no symbol '{attr}'")
-
+        
+        # Оборачиваем чтобы автоматически конвертировать str → bytes и bytes → str
+        def wrapper(*args):
+            converted = []
+            for arg in args:
+                if isinstance(arg, str):
+                    converted.append(arg.encode("utf-8"))
+                else:
+                    converted.append(arg)
+            result = fn(*converted)
+            if isinstance(result, bytes):
+                return result.decode("utf-8")
+            return result
+        
+        return wrapper
+    
     def __repr__(self) -> str:
         return f"<CLib '{self._name}'>"
 
@@ -196,25 +211,19 @@ def _find_lib(base_path: str) -> str:
     raise FileNotFoundError(f"Cannot find C library for '{base_path}'")
 
 
-def load(path: str) -> CLib:
-    """
-    Load a C library.
-
-    - If path ends with .h, parses the header and loads matching .dll/.so
-    - Otherwise loads the binary directly
-    """
+def load(path: str, base_dir: str = None) -> CLib:
     p = Path(path)
+    if not p.is_absolute():
+        if base_dir:
+            p = Path(base_dir) / p
+        else:
+            p = Path.cwd() / p
 
     if p.suffix == ".h":
-        # Parse header to get function signatures
-        header_content = _preprocess_header(path)
+        header_content = _preprocess_header(str(p))
         functions = _parse_functions(header_content)
-
-        # Find matching binary
         lib_path = _find_lib(str(p.with_suffix("")))
         lib = ctypes.CDLL(lib_path)
-
-        # Apply restype / argtypes
         for name, sig in functions.items():
             try:
                 fn = getattr(lib, name)
@@ -222,11 +231,10 @@ def load(path: str) -> CLib:
                 if sig["argtypes"]:
                     fn.argtypes = sig["argtypes"]
             except AttributeError:
-                pass  # symbol not in this lib, skip
-
+                pass
         return CLib(lib, p.stem)
     else:
-        lib_path = _find_lib(path)
+        lib_path = _find_lib(str(p))
         lib = ctypes.CDLL(lib_path)
         return CLib(lib, p.stem)
 

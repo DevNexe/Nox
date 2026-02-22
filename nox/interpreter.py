@@ -1122,9 +1122,11 @@ class Interpreter:
             },
         )
 
-        # --- clib module ---
         from . import clib as _clib_module
-        clib_mod = _module("clib", _clib_module._make_module_values())
+        _base = str(self.base_dir) if self.base_dir else None
+        _load_with_base = lambda path: _clib_module.load(path, base_dir=_base)
+        clib_values = {**_clib_module._make_module_values(), "load": _load_with_base}
+        clib_mod = _module("clib", clib_values)
         self.env.set("clib", clib_mod)
 
         self.env.set("math", math_mod)
@@ -1223,6 +1225,15 @@ class Interpreter:
 
     def _load_module(self, module_parts: List[str]) -> Module:
         module_key = ".".join(module_parts)
+
+        # Проверяем встроенные модули в env (math, http, clib и т.д.)
+        try:
+            val = self.env.get(module_key)
+            if isinstance(val, Module):
+                return val
+        except NameError:
+            pass
+
         if module_key in self.module_cache:
             return self.module_cache[module_key]
 
