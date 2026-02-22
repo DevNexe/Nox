@@ -55,32 +55,37 @@ DEFAULT_GITHUB_USER = "devnexe-alt"
 LIBRARIES_DIRNAME = "Libraries"
 
 
+def _exe_dir() -> Path:
+    try:
+        import __compiled__  # type: ignore
+        import sys
+        return Path(sys.executable).parent
+    except ImportError:
+        # dev режим: nox/cli.py -> nox/ -> project root
+        return Path(__file__).resolve().parent.parent
+
+
+def _libraries_root() -> Path:
+    return _exe_dir() / LIBRARIES_DIRNAME
+
+
 def run_source(source: str, base_dir: Path | None = None, current_file: Path | None = None) -> None:
     tokens = Lexer(source).tokenize()
     program = Parser(tokens).parse()
     Interpreter(base_dir=base_dir, current_file=current_file).run(program)
 
 
-def _resolve_run_target(path: str) -> Path:
+def _resolve_run_target(path: str, cwd: Optional[Path] = None) -> Path:
+    base = cwd or Path.cwd()
     target = Path(path)
+    if not target.is_absolute():
+        target = base / path
     if target.is_dir():
-        main_file = target / "__main__.nox"
-        if main_file.exists():
-            return main_file
-        main_file = target / "main.nox"
-        if main_file.exists():
-            return main_file
-        main_file = target / "app.nox"
-        if main_file.exists():
-            return main_file
+        for name in ("__main__.nox", "main.nox", "app.nox"):
+            if (target / name).exists():
+                return target / name
         raise RuntimeError("Directory has no __main__.nox, main.nox, or app.nox")
     return target
-
-
-def run_file(path: str) -> None:
-    file_path = _resolve_run_target(path)
-    source = file_path.read_text(encoding="utf-8")
-    run_source(source, base_dir=file_path.parent, current_file=file_path)
 
 
 def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
@@ -108,7 +113,6 @@ def _render_traceback_panel(
 ) -> None:
     line_text = str(line) if line is not None else "?"
 
-    # "Error in <file> in line <number>" [in <scope>]
     header = Text()
     header.append("Error", style="bold red")
     header.append(" in ")
@@ -170,14 +174,6 @@ def _normalize_repo_spec(spec: str) -> tuple[str, str]:
 
     repo_name = repo_url.rstrip("/").split("/")[-1]
     return repo_url, repo_name
-
-
-def _project_root() -> Path:
-    return Path(__file__).resolve().parent.parent
-
-
-def _libraries_root() -> Path:
-    return _project_root() / LIBRARIES_DIRNAME
 
 
 def _package_install(spec: str) -> int:
@@ -281,6 +277,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     import io
     import sys
 
+    # Сохраняем cwd сразу — до того как что-либо его поменяет (актуально для Nuitka --onefile)
+    original_cwd = Path.cwd()
+
     parser = argparse.ArgumentParser(prog="nox", description="Run Nox .nox scripts")
     subparsers = parser.add_subparsers(dest="command")
     try:
@@ -307,6 +306,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         raw_argv = ["run", *raw_argv]
     args = parser.parse_args(raw_argv)
 
+    if args.command is None:
+        parser.print_usage()
+        return 0
+
     if args.command == "package":
         try:
             if args.pkg_command == "install":
@@ -329,9 +332,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     resolved_path: Path | None = None
 
     try:
-        resolved_path = _resolve_run_target(file_arg)
+        resolved_path = _resolve_run_target(file_arg, original_cwd)
         with contextlib.redirect_stdout(output_buffer):
-            run_file(file_arg)
+            source = resolved_path.read_text(encoding="utf-8")
+            run_source(source, base_dir=resolved_path.parent, current_file=resolved_path)
         sys.stdout.write(output_buffer.getvalue())
         return 0
     except KeyboardInterrupt:
@@ -366,7 +370,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         _print_error(error_name, str(exc))
         return 3
     except FileNotFoundError as exc:
-        # Strip the [Errno 2] prefix from the message
         msg = str(exc)
         import re
         msg = re.sub(r"^\[Errno \d+\]\s*", "", msg)

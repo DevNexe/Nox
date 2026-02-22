@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Callable
 import threading
 import urllib.request
 import urllib.error
+import sys
 import urllib.parse
 import json
 
@@ -110,6 +111,14 @@ def _gte_num(a: float, b: float) -> bool:
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
+
+def _get_libraries_root():
+    exe = Path(sys.argv[0]).resolve()
+    if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
+        path = exe.parent / "Libraries"
+    else:
+        path = Path(__file__).resolve().parent.parent / "Libraries"
+    return path
 
 @dataclass
 class Environment:
@@ -1113,6 +1122,11 @@ class Interpreter:
             },
         )
 
+        # --- clib module ---
+        from . import clib as _clib_module
+        clib_mod = _module("clib", _clib_module._make_module_values())
+        self.env.set("clib", clib_mod)
+
         self.env.set("math", math_mod)
         self.env.set("string", string_mod)
         self.env.set("time", time_mod)
@@ -1245,16 +1259,15 @@ class Interpreter:
         base_dir = self.base_dir if self.base_dir is not None else Path.cwd()
         candidates: List[Path] = []
 
-        # Local script-relative imports
+        # Локальные импорты относительно текущего скрипта
         candidates.append(base_dir.joinpath(*module_parts).with_suffix(".nox"))
         candidates.append(base_dir.joinpath(*module_parts) / "__init__.nox")
 
-        # Libraries search (project root and cwd)
-        roots = {Path.cwd() / "Libraries", base_dir.parent / "Libraries"}
-        for root in roots:
-            if not root.exists():
-                continue
-            lib_root = root / module_parts[0]
+        # Libraries всегда рядом с exe
+        libs_root = _get_libraries_root()
+
+        if libs_root.exists():
+            lib_root = libs_root / module_parts[0]
             if len(module_parts) == 1:
                 candidates.append(lib_root / f"{module_parts[0]}.nox")
                 candidates.append(lib_root / "main.nox")
@@ -1268,14 +1281,3 @@ class Interpreter:
             if path.exists():
                 return path
         return None
-
-
-
-
-
-
-
-
-
-
-

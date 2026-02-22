@@ -2,7 +2,7 @@
 
 from typing import Iterable, List
 
-from .token import Token, TokenType
+from .tokens import Token, TokenType
 from .errors import NoxSyntaxError
 
 

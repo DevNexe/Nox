@@ -46,7 +46,7 @@ from .ast_nodes import (
     While,
     StructInit,
 )
-from .token import Token, TokenType
+from .tokens import Token, TokenType
 from .errors import NoxSyntaxError
 
 
