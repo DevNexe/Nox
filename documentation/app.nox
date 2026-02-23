@@ -89,8 +89,6 @@ pages_ru = pages_ru + [("/stdlib", "documentation/docs/pages/ru/stdlib.md")]
 pages_ru = pages_ru + [("/noxweb", "documentation/docs/pages/ru/noxweb.md")]
 pages_ru = pages_ru + [("/noxgram", "documentation/docs/pages/ru/noxgram.md")]
 
-# helpers
-
 define escape_html(text):
     text = string.replace(text, "&", "&amp;")
     text = string.replace(text, "<", "&lt;")
@@ -256,7 +254,6 @@ define page_handler(req):
     html = render_markdown(md)
     result render_page(info[1], html, req.path, nav, pages, subtitle, tagline)
 
-# routes
 app.get("/", page_handler)
 app.get("/getting-started", page_handler)
 app.get("/getting-started/setup", page_handler)

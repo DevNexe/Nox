@@ -1,5 +1,4 @@
-# TGBot4Nox - lightweight Telegram bot toolkit for Nox
-
+# NoxGram library
 
 class FSM:
     define init(self):

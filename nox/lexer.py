@@ -68,7 +68,6 @@ class Lexer:
                 continue
 
             indent = self._count_indent(raw_line, line_no)
-            # Skip indent/dedent tracking when inside brackets
             if self.bracket_depth == 0:
                 if indent > indent_stack[-1]:
                     indent_stack.append(indent)

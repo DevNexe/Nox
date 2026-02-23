@@ -61,7 +61,6 @@ def _exe_dir() -> Path:
         import sys
         return Path(sys.executable).parent
     except ImportError:
-        # dev режим: nox/cli.py -> nox/ -> project root
         return Path(__file__).resolve().parent.parent
 
 
@@ -113,7 +112,6 @@ def _resolve_run_target(path: str, cwd: Optional[Path] = None) -> Path:
     if not target.is_absolute():
         target = base / path
 
-    # Если не нашли в cwd — ищем рядом с exe/скриптом (та же логика что в _get_libraries_root)
     if not target.exists():
         exe = Path(sys.argv[0]).resolve()
         if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
@@ -197,7 +195,6 @@ def _is_github_url(text: str) -> bool:
 
 
 def _normalize_repo_spec(spec: str) -> tuple[str, str]:
-    """Return (repo_url, repo_name)."""
     cleaned = spec.strip()
 
     if _is_github_url(cleaned):
@@ -323,7 +320,6 @@ def main(argv: Optional[list[str]] = None) -> int:
     import io
     import sys
 
-    # Сохраняем cwd сразу — до того как что-либо его поменяет (актуально для Nuitka --onefile)
     original_cwd = Path.cwd()
 
     parser = argparse.ArgumentParser(prog="nox", description="Run Nox .nox scripts")

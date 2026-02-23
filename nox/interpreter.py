@@ -351,12 +351,10 @@ class Interpreter:
         p = Path(path)
         if p.is_absolute():
             return p
-        # Сначала ищем относительно папки скрипта
         if self.base_dir:
             candidate = self.base_dir / p
             if candidate.exists():
                 return candidate
-        # Фоллбек: рядом с exe или рядом с проектом
         exe = Path(sys.argv[0]).resolve()
         if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
             candidate = exe.parent / p
@@ -364,7 +362,6 @@ class Interpreter:
             candidate = Path(__file__).resolve().parent.parent / p
         if candidate.exists():
             return candidate
-        # Нигде не нашли — возвращаем base_dir путь чтобы ошибка была читаемой
         if self.base_dir:
             return self.base_dir / p
         return p
@@ -1247,7 +1244,6 @@ class Interpreter:
     def _load_module(self, module_parts: List[str]) -> Module:
         module_key = ".".join(module_parts)
 
-        # Проверяем встроенные модули в env (math, http, clib и т.д.)
         try:
             val = self.env.get(module_key)
             if isinstance(val, Module):
@@ -1291,11 +1287,9 @@ class Interpreter:
         base_dir = self.base_dir if self.base_dir is not None else Path.cwd()
         candidates: List[Path] = []
 
-        # Локальные импорты относительно текущего скрипта
         candidates.append(base_dir.joinpath(*module_parts).with_suffix(".nox"))
         candidates.append(base_dir.joinpath(*module_parts) / "__init__.nox")
 
-        # Libraries всегда рядом с exe
         libs_root = _get_libraries_root()
 
         if libs_root.exists():

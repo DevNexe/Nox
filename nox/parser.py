@@ -308,7 +308,6 @@ class Parser:
                 continue
             field_name = self._consume(TokenType.IDENT, "Expected field name").value
             self._consume(TokenType.COLON, "Expected ':' after field name")
-            # type name (ignored for now)
             self._consume(TokenType.IDENT, "Expected type name")
             self._consume(TokenType.NEWLINE, "Expected newline after field")
             fields.append(field_name)
@@ -335,7 +334,6 @@ class Parser:
                 continue
             if self._match(TokenType.DEFINE):
                 method_name = self._consume(TokenType.IDENT, "Expected method name").value
-                # Skip params and body (trait methods are declarations)
                 self._consume(TokenType.LPAREN, "Expected '(' after method name")
                 if not self._check(TokenType.RPAREN):
                     self._consume(TokenType.IDENT, "Expected parameter name")
@@ -519,7 +517,6 @@ class Parser:
                 self._consume(TokenType.RBRACE, "Expected '}' after dict")
                 self.bracket_depth -= 1
                 return self._postfix(DictLiteral(items))
-            # set literal
             items = [first]
             while self._match(TokenType.COMMA):
                 self._skip_newlines()
@@ -595,11 +592,9 @@ class Parser:
             if self._match(TokenType.LBRACKET):
                 token = self._previous()
                 self.bracket_depth += 1
-                # Check if this is a slice or index
                 self._skip_newlines()
                 if self._check(TokenType.COLON):
-                    # Slice with no start, e.g., [:5] or [:]
-                    self._advance()  # consume the colon
+                    self._advance()
                     stop = None
                     self._skip_newlines()
                     if not self._check(TokenType.RBRACKET) and not self._check(TokenType.COLON):
@@ -614,11 +609,9 @@ class Parser:
                     self.bracket_depth -= 1
                     expr = self._with_expr_loc(Slice(expr, None, stop, step), token)
                 else:
-                    # Could be index or slice with start
                     first = self._expression()
                     self._skip_newlines()
                     if self._match(TokenType.COLON):
-                        # It's a slice
                         self._skip_newlines()
                         stop = None
                         if not self._check(TokenType.RBRACKET) and not self._check(TokenType.COLON):
@@ -633,7 +626,6 @@ class Parser:
                         self.bracket_depth -= 1
                         expr = self._with_expr_loc(Slice(expr, first, stop, step), token)
                     else:
-                        # It's a simple index
                         self._skip_newlines()
                         self._consume(TokenType.RBRACKET, "Expected ']' after index")
                         self.bracket_depth -= 1
@@ -690,7 +682,6 @@ class Parser:
         return parts
 
     def _skip_newlines(self) -> None:
-        """Skip NEWLINE tokens when inside brackets/parentheses."""
         if self.bracket_depth > 0:
             while self._check(TokenType.NEWLINE):
                 self._advance()

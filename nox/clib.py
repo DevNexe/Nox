@@ -1,10 +1,3 @@
-"""
-clib — C library loader for Nox.
-Supports loading .dll/.so/.dylib via header files (.h) or direct loading.
-
-Dependencies (pure Python, no compiler needed):
-    pip install pcpp pycparser
-"""
 from __future__ import annotations
 
 import ctypes
@@ -13,9 +6,6 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
-
-
-# ─── ctypes type map ──────────────────────────────────────────────────────────
 
 _C_TYPE_MAP: Dict[str, Any] = {
     "void":               None,
@@ -45,20 +35,16 @@ def _map_type(type_str: str) -> Any:
         t = type_str.strip()
     return _C_TYPE_MAP.get(t, ctypes.c_void_p)
 
-
-# ─── Header preprocessing ─────────────────────────────────────────────────────
-
 def _preprocess_header(header_path: str) -> str:
-    """Try pcpp first, fall back to simple regex stripper."""
     try:
         import pcpp  # type: ignore
 
         class _SilentPreprocessor(pcpp.Preprocessor):
             def on_error(self, file, line, msg):
-                pass  # silence errors from system includes
+                pass
 
         pp = _SilentPreprocessor()
-        pp.line_directive = None  # don't emit # line directives
+        pp.line_directive = None
         with open(header_path, encoding="utf-8", errors="replace") as f:
             src = f.read()
         pp.parse(src, header_path)
@@ -68,27 +54,20 @@ def _preprocess_header(header_path: str) -> str:
     except ImportError:
         pass
 
-    # Fallback: strip macros and comments manually
     with open(header_path, encoding="utf-8", errors="replace") as f:
         src = f.read()
-    # Remove block comments
     src = re.sub(r"/\*.*?\*/", "", src, flags=re.DOTALL)
-    # Remove line comments
     src = re.sub(r"//[^\n]*", "", src)
-    # Remove preprocessor directives
     src = re.sub(r"^\s*#[^\n]*", "", src, flags=re.MULTILINE)
     return src
 
-
-# ─── Function signature parser ────────────────────────────────────────────────
-
 _FUNC_RE = re.compile(
     r"""
-    ([\w\s\*]+?)        # return type (group 1)
+    ([\w\s\*]+?)        
     \s+
-    (\w+)               # function name (group 2)
+    (\w+)               
     \s*\(\s*
-    ([^)]*)             # parameters (group 3)
+    ([^)]*)             
     \)\s*;
     """,
     re.VERBOSE | re.DOTALL,
@@ -97,8 +76,8 @@ _FUNC_RE = re.compile(
 _TYPEDEF_FUNC_RE = re.compile(
     r"""
     typedef\s+
-    ([\w\s\*]+?)\s*     # return type
-    \(\s*\*\s*(\w+)\s*\)  # (*name)
+    ([\w\s\*]+?)\s*     
+    \(\s*\*\s*(\w+)\s*\)  
     \s*\(\s*([^)]*)\)\s*;
     """,
     re.VERBOSE | re.DOTALL,
@@ -109,10 +88,8 @@ def _parse_param_type(param: str) -> Any:
     param = param.strip()
     if not param or param == "void":
         return None
-    # grab the type, ignore name
     parts = param.rsplit(None, 1)
     type_str = parts[0].strip() if len(parts) > 1 else param
-    # handle pointer in name like "int *ptr" → "int*"
     if "*" in param:
         base = param.replace("*", "").split()
         type_str = " ".join(base[:-1]) + "*" if len(base) > 1 else "void*"
@@ -127,7 +104,6 @@ def _parse_functions(header_content: str) -> Dict[str, Dict[str, Any]]:
         name = m.group(2).strip()
         params_raw = m.group(3).strip()
 
-        # Skip obvious non-function matches
         if ret_raw in {"typedef", "struct", "enum", "union"}:
             continue
         if name.startswith("_"):
@@ -145,12 +121,7 @@ def _parse_functions(header_content: str) -> Dict[str, Dict[str, Any]]:
 
     return functions
 
-
-# ─── Lib wrapper ──────────────────────────────────────────────────────────────
-
 class CLib:
-    """Wraps a ctypes CDLL and exposes its functions as callable attributes."""
-
     def __init__(self, lib: ctypes.CDLL, name: str) -> None:
         self._lib = lib
         self._name = name
@@ -161,7 +132,6 @@ class CLib:
         except AttributeError:
             raise RuntimeError(f"C library '{self._name}' has no symbol '{attr}'")
         
-        # Оборачиваем чтобы автоматически конвертировать str → bytes и bytes → str
         def wrapper(*args):
             converted = []
             for arg in args:
@@ -179,11 +149,7 @@ class CLib:
     def __repr__(self) -> str:
         return f"<CLib '{self._name}'>"
 
-
-# ─── Public API ───────────────────────────────────────────────────────────────
-
 def _find_lib(base_path: str) -> str:
-    """Given a path (possibly without extension), find the actual library file."""
     p = Path(base_path)
     if p.exists():
         return str(p)
@@ -200,7 +166,6 @@ def _find_lib(base_path: str) -> str:
         if candidate.exists():
             return str(candidate)
 
-    # Also try lib prefix on Unix
     if sys.platform != "win32":
         parent = p.parent
         for ext in exts:
@@ -240,20 +205,15 @@ def load(path: str, base_dir: str = None) -> CLib:
 
 
 def call(clib: Any, func_name: str, *args: Any) -> Any:
-    """Call a function from a CLib by name."""
     if not isinstance(clib, CLib):
         raise RuntimeError("clib.call expects a CLib object as first argument")
     fn = clib.get(func_name)
     return fn(*args)
 
-
-# ─── Types exposed to Nox ─────────────────────────────────────────────────────
-
 def _make_module_values() -> Dict[str, Any]:
     return {
         "load":   load,
         "call":   call,
-        # expose ctypes basics for advanced users
         "c_int":        ctypes.c_int,
         "c_float":      ctypes.c_float,
         "c_double":     ctypes.c_double,

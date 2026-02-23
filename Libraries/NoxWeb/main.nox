@@ -78,8 +78,6 @@ class Blueprint:
 define blueprint():
     result Blueprint()
 
-# helpers
-
 define text(body, status=200):
     result (status, body)
 
