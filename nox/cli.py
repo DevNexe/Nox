@@ -354,7 +354,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(raw_argv)
 
     if args.version:
-        console.print(_read_version_from_info_cfg())
+        console.print(f"Nox version: {_read_version_from_info_cfg()}")
         return 0
 
     if args.command is None:
