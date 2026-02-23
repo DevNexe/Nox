@@ -65,7 +65,12 @@ def _exe_dir() -> Path:
 
 
 def _libraries_root() -> Path:
-    return _exe_dir() / LIBRARIES_DIRNAME
+    exe = Path(sys.argv[0]).resolve()
+    if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
+        path = exe.parent / LIBRARIES_DIRNAME
+    else:
+        path = Path(__file__).resolve().parent.parent / LIBRARIES_DIRNAME
+    return path
 
 
 def _read_version_from_info_cfg() -> str:
