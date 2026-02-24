@@ -51,12 +51,6 @@ The setup manager will guide you through everything:
   5) Exit
 ```
 
-Then run your first script:
-
-```bash
-python -m nox hello.nox
-```
-
 ---
 
 ## The Language
