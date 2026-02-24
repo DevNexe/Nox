@@ -1,76 +1,89 @@
+<div align="center">
+
+<img src="documentation/docs/static/icon.png" alt="Nox Logo" width="120" />
+
 # Nox
 
-> A clean, expressive scripting language with Python-like syntax, built from scratch in pure Python.
+**A clean, expressive scripting language — built from scratch.**
 
-```
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)](#)
+
+```nox
 define greet(name):
     result "Hello, " + name + "!"
 
-display greet("World")
+display greet("World")   # Hello, World!
 ```
+
+</div>
 
 ---
 
 ## What is Nox?
 
-Nox is a tree-walking interpreted language with indentation-based blocks, dynamic typing, and a compact standard library. It runs on top of Python but has its own lexer, parser, AST, and interpreter — no Python eval, no exec. It's designed to be readable, hackable, and fun to extend.
+Nox is a **tree-walking interpreted language** with its own lexer, parser, AST, and interpreter — written entirely in pure Python, with zero use of `eval` or `exec`. It's fast to hack on, easy to read, and designed to grow.
 
-The language supports classes, traits, structs, async/await, decorators, pattern matching, C library integration via ctypes, and a built-in HTTP server. A package manager lets you install libraries directly from GitHub. Documentation runs as a Nox web app powered by NoxWeb.
+It has classes, traits, structs, async/await, decorators, pattern matching, C/C++ FFI, a built-in HTTP server, and a GitHub-powered package manager. The docs site runs as a Nox web app.
 
 ---
 
-## Quick Start
+## Getting Started
 
-**Requirements:** Python 3.8+
+**Requires Python 3.8+**
 
 ```bash
-# Run a script
+git clone https://github.com/devnexe-alt/nox
+cd nox
+python setup.py
+```
+
+The setup manager will guide you through everything:
+
+```
+  ███╗   ██╗ ██████╗ ██╗  ██╗
+  ████╗  ██║██╔═══██╗╚██╗██╔╝
+  ██╔██╗ ██║██║   ██║ ╚███╔╝
+  ██║╚██╗██║██║   ██║ ██╔██╗
+  ██║ ╚████║╚██████╔╝██╔╝ ██╗
+  ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝
+
+  The Nox Programming Language — Toolchain Manager
+
+  1) Install / setup environment
+  2) Show activate instructions
+  3) Build executable
+  4) Update dependencies
+  5) Exit
+```
+
+Then run your first script:
+
+```bash
 python -m nox hello.nox
-
-# Run a folder — Nox looks for __main__.nox, main.nox, or app.nox automatically
-python -m nox my_project/
-
-# This means you can run the entire project just by pointing at its directory:
-python -m nox .
-python -m nox examples/
-
-# Install a library from GitHub
-python -m nox package install user/repo
-
-# List installed libraries
-python -m nox package list
-
-# Remove a library
-python -m nox package remove LibraryName
-```
-
-**hello.nox:**
-```
-display("Hello, Nox!")
 ```
 
 ---
 
-## Language Overview
+## The Language
 
 ### Variables & Types
 
-```
-x = 42
-pi = 3.14
-name = "nox"
-flag = true
-items = [1, 2, 3]
-point = (1, 2)
+```nox
+x       = 42
+pi      = 3.14
+name    = "nox"
+flag    = true
+items   = [1, 2, 3]
+point   = (10, 20)
 mapping = {"key": "value"}
-empty = none
+nothing = none
 ```
 
 ### Functions
 
-Functions are defined with `define` and return values with `result`:
-
-```
+```nox
 define add(a, b=0):
     result a + b
 
@@ -81,31 +94,31 @@ define sum_all(*numbers):
     result total
 
 square = lambda x: x * x
+
+display add(3, 4)       # 7
+display sum_all(1,2,3)  # 6
+display square(9)       # 81
 ```
 
 ### Control Flow
 
-```
-# if / else if / else
+```nox
 if score >= 90:
     display("A")
-else if score >= 80:
+else if score >= 70:
     display("B")
 else:
     display("F")
 
-# for loop
-for item in items:
+for item in ["apple", "banana", "cherry"]:
     display(item)
 
-# repeat loop
 repeat 5:
     display("tick")
 
 repeat count < 10:
     count = count + 1
 
-# match statement
 match status:
     case 200, 201:
         display("ok")
@@ -117,122 +130,133 @@ match status:
 
 ### Classes, Structs & Traits
 
+```nox
+class Animal:
+    define init(self, name):
+        self.name = name
+
+    define speak(self):
+        result "..."
+
+class Dog(Animal):
+    define speak(self):
+        result self.name + " says: Woof!"
+
+dog = Dog("Rex")
+display dog.speak()   # Rex says: Woof!
 ```
-class Point:
-    define init(self, x, y):
-        self.x = x
-        self.y = y
 
-    define distance(self):
-        result (self.x ** 2 + self.y ** 2) ** 0.5
+```nox
+struct Point:
+    x: float
+    y: float
 
-p = Point(3, 4)
-display(p.distance())   # 5.0
+p = Point{x: 3.0, y: 4.0}
+display p.x   # 3.0
+```
 
-struct User:
-    name: str
-    age: int
-
-user = User{name: "Alice", age: 30}
-
+```nox
 trait Serializable:
     define to_json(self):
         result ""
 
-class Person:
+class Config:
     implement Serializable
+
+    define to_json(self):
+        result json.encode({"version": "1.0"})
 ```
 
 ### Error Handling
 
-```
+```nox
 try:
-    result risky_operation()
+    data = fs.read("config.json")
 except:
-    display("something went wrong")
+    display("Config not found, using defaults")
 finally:
-    display("done")
+    display("Done")
 ```
 
-### Multiline Structures
+### Async / Await
 
-Anything inside `()`, `[]`, or `{}` can span multiple lines — no backslash needed:
+```nox
+async define fetch(url):
+    response = await http.get(url)
+    result response["json"]
 
+task = create_task(fetch, "https://api.example.com/data")
+data = await task
+display data
 ```
+
+### Multiline Expressions
+
+No backslash continuation — anything inside `()`, `[]`, `{}` spans lines freely:
+
+```nox
 config = {
     "host": "localhost",
     "port": 8080,
-    "features": [
-        "api",
-        "web",
-        "auth"
-    ]
+    "features": ["api", "web", "auth"]
 }
-
-result = process(
-    user_data,
-    filters=["active", "verified"],
-    options={"timeout": 30}
-)
 ```
 
-### String Slicing
+### Slicing
 
-Python-style slicing works on strings, lists, and tuples:
-
-```
+```nox
 text = "Hello, World!"
-display(text[0:5])    # Hello
-display(text[::-1])   # !dlroW ,olleH
-display(text[-6:])    # World!
+display text[0:5]    # Hello
+display text[::-1]   # !dlroW ,olleH
+display text[-6:]    # World!
 ```
 
 ---
 
 ## Standard Library
 
-| Module   | Functions |
-|----------|-----------|
-| `math`   | `abs`, `min`, `max`, `floor`, `ceil`, `sqrt`, `pow` |
-| `string` | `split`, `join`, `lower`, `upper`, `replace`, `startswith` |
-| `time`   | `now`, `sleep` |
-| `json`   | `encode`, `decode` |
-| `fs`     | `read`, `write`, `exists` |
-| `os`     | `cwd`, `listdir` |
-| `http`   | `serve`, `get`, `post`, `request` |
-| `clib`   | `load`, `call` — C library FFI via ctypes |
-| `asyncio`| `create_task`, `gather`, `run`, `sleep` |
-
-```
-connect json
-
-data = json.encode({"message": "hello"})
-obj = json.decode(data)
-display(obj["message"])
-```
+| Module     | What it does |
+|------------|-------------|
+| `math`     | `abs` `min` `max` `floor` `ceil` `sqrt` `pow` |
+| `string`   | `split` `join` `lower` `upper` `replace` `startswith` |
+| `time`     | `now` `sleep` |
+| `json`     | `encode` `decode` |
+| `fs`       | `read` `write` `exists` |
+| `os`       | `cwd` `listdir` |
+| `http`     | `serve` `get` `post` `request` |
+| `clib`     | `load` `call` — C/C++ FFI via ctypes |
+| `compiler` | `compile` — compile C/C++ source to native library |
+| `process`  | `run` `shell` — spawn and control subprocesses |
+| `asyncio`  | `create_task` `gather` `run` `sleep` |
 
 ---
 
-## Modules & Packages
+## Package Manager
 
-```
-connect math
-connect json as j
-from string connect split, join
-
+```bash
 # Install from GitHub
-# python -m nox package install devnexe-alt/NoxWeb
+python -m nox package install devnexe-alt/NoxWeb
+
+# Short form (defaults to devnexe-alt org)
+python -m nox package install NoxGram
+
+# Full URL
+python -m nox package install https://github.com/user/repo
+
+# Manage
+python -m nox package list
+python -m nox package remove NoxWeb
 ```
 
-Libraries live in the `Libraries/` folder next to your script or binary. Each library has a `.nxinfo` manifest and a `main.nox` entry point.
+Libraries live in `Libraries/` next to your script or binary.
 
 ---
 
 ## NoxWeb
 
-Build web apps entirely in Nox:
+A full web framework in Nox:
 
-```
+```nox
 connect NoxWeb
 
 app = NoxWeb.web()
@@ -250,105 +274,90 @@ define ping(req):
 app.run(8080)
 ```
 
-Supports GET/POST routes, blueprints, static file serving, and template rendering with `{{ variable }}` substitution.
-
 ---
 
 ## NoxGram
 
-Build Telegram bots in Nox:
+Telegram bots in Nox:
 
-```
+```nox
 connect NoxGram
 
 b = NoxGram.bot("YOUR_TOKEN")
 
 b.command("start", define handler(ctx):
-    ctx["bot"].send_message(ctx["chat_id"], "Hello!")
+    ctx["bot"].send_message(ctx["chat_id"], "Hello from Nox!")
 )
 
 b.poll()
 ```
 
-Includes FSM (finite state machine) for multi-step conversations, middleware support, and filter-based routing.
-
 ---
 
-## C Library Integration
+## C / C++ Integration
 
-Load and call native C libraries without a compiler at runtime:
-
-```
+```nox
+connect compiler
 connect clib
 
-# Load via header file (auto-maps types)
-lib = clib.load("mylib.h")
-result = lib.get("add")(10, 5)
-display(result)   # 15
+# Compile C source → native library
+compiler.compile("mylib.c")
 
-# Or load binary directly
+# Load and call
 lib = clib.load("mylib.dll")
-greet = lib.get("greet")
-display(greet("Nox"))
+value = clib.call(lib, "add", 10, 5)
+display value   # 15
 ```
 
-Uses `pcpp` + `pycparser` for header preprocessing and `ctypes` for the actual FFI. Strings are automatically converted between Python `str` and C `char*`.
+```nox
+# Or load an existing library via header
+lib = clib.load("mylib.h")
+display lib.get("greet")("Nox")
+```
+
+Auto-detects MSVC, GCC, or Clang. Strings auto-convert between Python `str` and C `char*`.
 
 ---
 
-## Async Support
+## Process Control
 
-```
-async define fetch_data(url):
-    response = await http.get(url)
-    result response["json"]
+```nox
+connect process
 
-task = create_task(fetch_data, "https://api.example.com/data")
-data = await task
-```
+p = process.run("ffmpeg", "-i", "input.mp4", "output.gif")
 
----
+repeat p.alive():
+    for line in p.output():
+        display line
 
-## Project Structure
+display "Exit: " + string.str(p.wait())
 
-```
-project/
-├── main.nox           # entry point
-├── Libraries/         # installed packages
-│   ├── NoxWeb/
-│   └── TGBot4Nox/
-├── templates/
-└── static/
+# or kill it
+p.kill()
 ```
 
 ---
 
-## Compiling to Binary
-
-Nox supports compilation via [Nuitka](https://nuitka.net/):
+## Folder Execution
 
 ```bash
-python -m nuitka --onefile \
-  --include-package=nox \
-  --include-package=rich \
-  --output-filename=nox \
-  --python-flag=-m nox
+python -m nox .
+python -m nox my_project/
+python -m nox examples/weather_app
 ```
 
-The resulting binary works standalone — no Python installation required on the target machine. The `Libraries/` folder should sit next to the binary.
+Looks for `__main__.nox` → `main.nox` → `app.nox` automatically.
 
 ---
 
 ## Error Messages
 
-Nox shows styled tracebacks with line numbers and code context:
-
 ```
 Traceback:
-  Error in main.nox at line 7:
-    5  items = [1, 2, 3]
+  Error in main.nox at line 7 in process_data:
+    5   items = [1, 2, 3]
     6
-  ❱  7  display(items[10])
+  ❱  7   display items[10]
     8
 
 IndexError: list index out of range
@@ -356,32 +365,70 @@ IndexError: list index out of range
 
 ---
 
-## Interpreter Architecture
+## Compile to Binary
 
-| Component | File | Role |
-|-----------|------|------|
-| Lexer | `nox/lexer.py` | Tokenizes source with indent/dedent tracking |
-| Parser | `nox/parser.py` | Recursive descent, produces AST |
-| AST | `nox/ast_nodes.py` | Dataclass-based node definitions |
-| Interpreter | `nox/interpreter.py` | Tree-walking evaluator with closures |
-| CLI | `nox/cli.py` | Entry point, error rendering, package manager |
-| JIT | `nox/jit.py` | Optional Numba acceleration for numeric ops |
-| clib | `nox/clib.py` | C FFI via ctypes |
+```bash
+python setup.py build
+```
+
+Produces a standalone `nox.exe` / `nox` — no Python needed on target. Place `Libraries/` next to it.
 
 ---
 
 ## Documentation
 
-The documentation site is itself a Nox app. Run it with:
-
 ```bash
 python -m nox documentation
 ```
 
-Then open [http://localhost:8080](http://localhost:8080). Includes English and Russian docs.
+Opens at [http://localhost:8080](http://localhost:8080). Available in English and Russian.
 
 ---
 
-## License
+## Architecture
 
-MIT — see [LICENSE](LICENSE)
+| Component   | File                 | Role |
+|-------------|----------------------|------|
+| Lexer        | `nox/lexer.py`       | Tokenizes source with indent/dedent tracking |
+| Parser       | `nox/parser.py`      | Recursive descent → AST |
+| AST          | `nox/ast_nodes.py`   | Dataclass-based node definitions |
+| Interpreter  | `nox/interpreter.py` | Tree-walking evaluator with closures |
+| CLI          | `nox/cli.py`         | Entry point, error rendering, package manager |
+| JIT          | `nox/jit.py`         | Optional Numba acceleration for numeric ops |
+| clib         | `nox/clib.py`        | C FFI via ctypes |
+| compiler     | `nox/compiler.py`    | C/C++ compilation via system compiler |
+| process      | `nox/process.py`     | Subprocess control |
+
+---
+
+## Project Layout
+
+```
+nox/
+├── nox/                 # interpreter source
+│   ├── lexer.py
+│   ├── parser.py
+│   ├── ast_nodes.py
+│   ├── interpreter.py
+│   ├── cli.py
+│   ├── compiler.py
+│   ├── process.py
+│   ├── clib.py
+│   ├── jit.py
+│   └── info.cfg
+├── documentation/       # docs web app
+├── Libraries/           # installed packages
+├── requirements.txt
+├── setup.py             # toolchain manager
+└── LICENSE
+```
+
+---
+
+<div align="center">
+
+MIT License — see [LICENSE](LICENSE)
+
+*Built with Python. No magic.*
+
+</div>

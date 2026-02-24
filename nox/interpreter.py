@@ -1060,6 +1060,8 @@ class Interpreter:
         import json as _json
         import os as _os
         import time as _time
+        from . import process as _process_module
+        from . import compiler as _compiler_module
 
         math_mod = _module(
             "math",
@@ -1140,12 +1142,20 @@ class Interpreter:
             },
         )
 
+        process_mod = _module("process", _process_module._make_process_module())
+
+        compiler_mod = _module("compiler", _compiler_module._make_module_values())
+
         from . import clib as _clib_module
         _base = str(self.base_dir) if self.base_dir else None
         _load_with_base = lambda path: _clib_module.load(path, base_dir=_base)
         clib_values = {**_clib_module._make_module_values(), "load": _load_with_base}
         clib_mod = _module("clib", clib_values)
         self.env.set("clib", clib_mod)
+
+        self.env.set("process", process_mod)
+
+        self.env.set("compiler", compiler_mod)
 
         self.env.set("math", math_mod)
         self.env.set("string", string_mod)
