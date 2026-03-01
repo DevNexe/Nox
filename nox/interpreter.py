@@ -1073,6 +1073,10 @@ class Interpreter:
                 "ceil": _math.ceil,
                 "sqrt": _math.sqrt,
                 "pow": pow,
+                "sin": _math.sin,
+                "cos": _math.cos,
+                "tan": _math.tan,
+                "pi": _math.pi,
             },
         )
 

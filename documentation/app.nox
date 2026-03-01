@@ -49,6 +49,7 @@ pages_en = pages_en + [("/errors", "documentation/docs/pages/en/errors.md")]
 pages_en = pages_en + [("/stdlib", "documentation/docs/pages/en/stdlib.md")]
 pages_en = pages_en + [("/noxweb", "documentation/docs/pages/en/noxweb.md")]
 pages_en = pages_en + [("/noxgram", "documentation/docs/pages/en/noxgram.md")]
+pages_en = pages_en + [("/noxgl", "documentation/docs/pages/en/noxgl.md")]
 
 pages_ru = []
 pages_ru = pages_ru + [("/", "documentation/docs/pages/ru/overview.md")]
@@ -88,6 +89,7 @@ pages_ru = pages_ru + [("/errors", "documentation/docs/pages/ru/errors.md")]
 pages_ru = pages_ru + [("/stdlib", "documentation/docs/pages/ru/stdlib.md")]
 pages_ru = pages_ru + [("/noxweb", "documentation/docs/pages/ru/noxweb.md")]
 pages_ru = pages_ru + [("/noxgram", "documentation/docs/pages/ru/noxgram.md")]
+pages_ru = pages_ru + [("/noxgl", "documentation/docs/pages/ru/noxgl.md")]
 
 define escape_html(text):
     text = string.replace(text, "&", "&amp;")
@@ -291,5 +293,6 @@ app.get("/errors", page_handler)
 app.get("/stdlib", page_handler)
 app.get("/noxweb", page_handler)
 app.get("/noxgram", page_handler)
+app.get("/noxgl", page_handler)
 
 app.run(8080)

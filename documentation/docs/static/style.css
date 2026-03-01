@@ -16,19 +16,16 @@
 
 html[data-theme="light"] {
   filter: invert(1) hue-rotate(180deg);
-  .nav-section:hover .nav-toggle {
-    color: var(--accent-2);
-  }
+}
+
+html[data-theme="light"] .nav-section:hover .nav-toggle {
+  color: var(--accent-2);
 }
 
 html[data-theme="light"] img,
 html[data-theme="light"] video,
 html[data-theme="light"] canvas {
   filter: invert(1) hue-rotate(180deg);
-}
-
-html[data-theme="light"] .topbar-logo {
-  filter: none !important;
 }
 
 * {
@@ -1205,6 +1202,32 @@ ul, ol {
 }
 
 /* default: sidebar behaves as overlay on all sizes (no desktop media overrides) */
+
+/* Desktop fallback: keep sidebar visible even if JS is blocked/unsupported. */
+@media (min-width: 768px) {
+  .layout {
+    grid-template-columns: 280px 1fr;
+  }
+
+  .layout::before {
+    display: none !important;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: var(--topbar-h);
+    transform: translateX(0);
+    box-shadow: none;
+  }
+
+  .topbar-burger {
+    display: none;
+  }
+
+  html.sidebar-open body {
+    overflow: auto;
+  }
+}
 
 /* hide redundant toggle inside sidebar (keeps topbar burger visible) */
 .sidebar .sidebar-toggle {

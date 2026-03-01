@@ -56,8 +56,10 @@ markActiveNav(window.location.pathname);
         if (!res.ok) continue;
         const text = await res.text();
         const doc = new DOMParser().parseFromString(text, 'text/html');
-        const title = doc.querySelector('title')?.textContent || href;
-        const content = (doc.getElementById('page-content')?.textContent || doc.body.textContent || '').replace(/\s+/g, ' ');
+        const titleNode = doc.querySelector('title');
+        const title = (titleNode && titleNode.textContent) ? titleNode.textContent : href;
+        const pageContentNode = doc.getElementById('page-content');
+        const content = ((pageContentNode && pageContentNode.textContent) || doc.body.textContent || '').replace(/\s+/g, ' ');
         entries.push({ href, title, content });
       } catch (e) {
         // ignore fetch errors for specific pages
@@ -233,7 +235,7 @@ function initNavToggles() {
   // Restore compact state on desktop
   if (!isMobile()) {
     const saved = localStorage.getItem("sidebar-compact");
-    if (saved === null || saved === "1") {
+    if (saved === "1") {
       layout.classList.add("compact");
     }
   }
@@ -242,7 +244,7 @@ function initNavToggles() {
   window.addEventListener("resize", () => {
     if (!isMobile()) {
       const saved = localStorage.getItem("sidebar-compact");
-      if (saved === null || saved === "1") {
+      if (saved === "1") {
         layout.classList.add("compact");
       }
     }
@@ -359,7 +361,11 @@ function attachLangToLinks(root) {
 function _getGroupId(group) {
   if (!group) return null;
   const a = group.querySelector('.nav-section > a');
-  if (a) return a.getAttribute('href')?.split('?')[0].split('#')[0] || null;
+  if (a) {
+    const href = a.getAttribute('href');
+    if (!href) return null;
+    return href.split('?')[0].split('#')[0] || null;
+  }
   const title = group.querySelector('.nav-section-title');
   return title ? title.textContent.trim() : null;
 }

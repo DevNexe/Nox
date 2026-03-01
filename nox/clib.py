@@ -30,10 +30,27 @@ _C_TYPE_MAP: Dict[str, Any] = {
 
 
 def _map_type(type_str: str) -> Any:
-    t = type_str.strip().rstrip("*").strip()
-    if type_str.strip().endswith("*"):
-        t = type_str.strip()
-    return _C_TYPE_MAP.get(t, ctypes.c_void_p)
+    raw = " ".join(type_str.replace("\t", " ").split())
+    pointer_count = raw.count("*")
+    base = raw.replace("*", "").strip()
+    if base.startswith("const "):
+        base = base[6:].strip()
+
+    if base == "void" and pointer_count == 0:
+        return None
+    if base == "char" and pointer_count == 1:
+        return ctypes.c_char_p
+    if base == "char" and pointer_count == 2:
+        return ctypes.POINTER(ctypes.c_char_p)
+    if base == "void" and pointer_count >= 1:
+        return ctypes.c_void_p
+
+    ctype = _C_TYPE_MAP.get(base, ctypes.c_void_p)
+    if ctype is None:
+        ctype = ctypes.c_void_p
+    for _ in range(pointer_count):
+        ctype = ctypes.POINTER(ctype)
+    return ctype
 
 def _preprocess_header(header_path: str) -> str:
     try:
@@ -90,9 +107,8 @@ def _parse_param_type(param: str) -> Any:
         return None
     parts = param.rsplit(None, 1)
     type_str = parts[0].strip() if len(parts) > 1 else param
-    if "*" in param:
-        base = param.replace("*", "").split()
-        type_str = " ".join(base[:-1]) + "*" if len(base) > 1 else "void*"
+    if type_str in {"const", "unsigned", "signed"}:
+        type_str = param
     return _map_type(type_str)
 
 
@@ -190,6 +206,101 @@ def _find_lib(base_path: str) -> str:
     raise FileNotFoundError(f"Cannot find C library for '{base_path}'")
 
 
+def _uint_ref(value: int = 0) -> Any:
+    return ctypes.c_uint(int(value))
+
+
+def _int_ref(value: int = 0) -> Any:
+    return ctypes.c_int(int(value))
+
+
+def _float_ref(value: float = 0.0) -> Any:
+    return ctypes.c_float(float(value))
+
+
+def _double_ref(value: float = 0.0) -> Any:
+    return ctypes.c_double(float(value))
+
+
+def _pointer(value: Any) -> Any:
+    return ctypes.pointer(value)
+
+
+def _deref(value: Any) -> Any:
+    return value.value
+
+
+def _set_ref(ref: Any, value: Any) -> None:
+    ref.value = value
+
+
+def _float_array(values: Any) -> Any:
+    items = [float(v) for v in values]
+    arr_t = ctypes.c_float * len(items)
+    return arr_t(*items)
+
+
+def _int_array(values: Any) -> Any:
+    items = [int(v) for v in values]
+    arr_t = ctypes.c_int * len(items)
+    return arr_t(*items)
+
+
+def _uint_array(values: Any) -> Any:
+    items = [int(v) for v in values]
+    arr_t = ctypes.c_uint * len(items)
+    return arr_t(*items)
+
+
+def _byte_array(values: Any) -> Any:
+    items = [int(v) & 0xFF for v in values]
+    arr_t = ctypes.c_ubyte * len(items)
+    return arr_t(*items)
+
+
+def _c_string(value: Any) -> Any:
+    return ctypes.c_char_p(str(value).encode("utf-8"))
+
+
+def _c_string_array(values: Any) -> Any:
+    if isinstance(values, str):
+        values = [values]
+    items = [str(v).encode("utf-8") for v in values]
+    arr_t = ctypes.c_char_p * len(items)
+    return arr_t(*items)
+
+
+def _string_buffer(size: Any) -> Any:
+    n = int(size)
+    if n < 1:
+        n = 1
+    return ctypes.create_string_buffer(n)
+
+
+def _buffer_text(buf: Any) -> str:
+    raw = bytes(buf)
+    end = raw.find(b"\x00")
+    if end >= 0:
+        raw = raw[:end]
+    return raw.decode("utf-8", errors="replace")
+
+
+def _make_func(addr: Any, restype: Any = None, argtypes: Any = None) -> Any:
+    if addr is None:
+        raise RuntimeError("make_func expects non-null address")
+    if isinstance(addr, ctypes.c_void_p):
+        addr = addr.value
+    if not addr:
+        raise RuntimeError("make_func expects non-zero address")
+    if argtypes is None:
+        argtypes = []
+    if sys.platform == "win32":
+        fn_type = ctypes.WINFUNCTYPE(restype, *argtypes)
+    else:
+        fn_type = ctypes.CFUNCTYPE(restype, *argtypes)
+    return fn_type(int(addr))
+
+
 def load(path: str, base_dir: str = None) -> CLib:
     p = Path(path)
     if not p.is_absolute():
@@ -228,7 +339,25 @@ def _make_module_values() -> Dict[str, Any]:
     return {
         "load":   load,
         "call":   call,
+        "uint_ref": _uint_ref,
+        "int_ref": _int_ref,
+        "float_ref": _float_ref,
+        "double_ref": _double_ref,
+        "pointer": _pointer,
+        "deref": _deref,
+        "set_ref": _set_ref,
+        "float_array": _float_array,
+        "int_array": _int_array,
+        "uint_array": _uint_array,
+        "byte_array": _byte_array,
+        "c_string": _c_string,
+        "c_string_array": _c_string_array,
+        "string_buffer": _string_buffer,
+        "buffer_text": _buffer_text,
+        "make_func": _make_func,
         "c_int":        ctypes.c_int,
+        "c_uint":       ctypes.c_uint,
+        "c_ubyte":      ctypes.c_ubyte,
         "c_float":      ctypes.c_float,
         "c_double":     ctypes.c_double,
         "c_char_p":     ctypes.c_char_p,
