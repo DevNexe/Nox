@@ -173,6 +173,20 @@ def _find_lib(base_path: str) -> str:
             if candidate.exists():
                 return str(candidate)
 
+    # Fallback to system dynamic loader search (PATH/system dirs).
+    # This is required for libraries like opengl32.dll on Windows.
+    if sys.platform == "win32":
+        if p.suffix:
+            return p.name
+        return f"{p.name}.dll"
+    if sys.platform == "darwin":
+        if p.suffix:
+            return p.name
+        return f"lib{p.name}.dylib"
+    if p.suffix:
+        return p.name
+    return f"lib{p.name}.so"
+
     raise FileNotFoundError(f"Cannot find C library for '{base_path}'")
 
 
