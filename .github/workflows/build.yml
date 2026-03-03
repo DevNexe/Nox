@@ -28,8 +28,7 @@ jobs:
           --include-package=nox --include-package=rich 
           --nofollow-import-to=numba 
           --include-data-files=nox/info.cfg=nox/info.cfg 
-          --python-flag=-m nox 
-          nox/__main__.py
+          --python-flag=-m nox
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
@@ -53,15 +52,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y patchelf libfuse2
 
-      - name: Build with Nuitka
+- name: Build with Nuitka
         run: >
           python -m nuitka --onefile --standalone --assume-yes-for-downloads 
           --output-dir=dist --output-filename=nox 
           --include-package=nox --include-package=rich 
           --nofollow-import-to=numba 
           --include-data-files=nox/info.cfg=nox/info.cfg 
-          --python-flag=-m nox 
-          nox/__main__.py
+          --python-flag=-m nox
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
