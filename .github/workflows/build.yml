@@ -42,13 +42,13 @@ jobs:
         uses: thedoctor0/zip-release@main
         with:
           type: 'zip'
-          filename: 'nox_windows.zip'
+          filename: '../nox_windows.zip' # Создаем уровнем выше, в корне
           directory: 'release_win'
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: nox_windows.zip
+          files: nox_windows.zip # Теперь он в корне и будет найден
 
   build-linux:
     runs-on: ubuntu-latest
@@ -87,7 +87,7 @@ jobs:
         uses: thedoctor0/zip-release@main
         with:
           type: 'zip'
-          filename: 'nox_linux.zip'
+          filename: '../nox_linux.zip' # Создаем уровнем выше
           directory: 'release_linux'
 
       - name: Upload to Release
