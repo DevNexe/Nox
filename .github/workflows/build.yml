@@ -1,0 +1,53 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install nuitka ordered-set rich
+
+      - name: Build with Nuitka
+        run: python -m nuitka --onefile --standalone --output-filename=nox.exe --output-dir=dist --include-package=nox nox/__main__.py
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/nox.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install nuitka ordered-set rich
+          sudo apt-get install -y patchelf
+
+      - name: Build with Nuitka
+        run: python -m nuitka --onefile --standalone --output-filename=nox --output-dir=dist --include-package=nox nox/__main__.py
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/nox
