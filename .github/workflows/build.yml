@@ -18,15 +18,13 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install nuitka ordered-set rich zstandard
+        run: pip install nuitka ordered-set rich zstandard
 
       - name: Build with Nuitka
         run: >
           python -m nuitka --onefile --standalone --assume-yes-for-downloads 
           --output-dir=dist --output-filename=nox.exe 
           --windows-icon-from-ico=nox/icon.ico 
-          --plugin-enable=qt-plugins
           --include-package=nox --include-package=rich 
           --nofollow-import-to=numba 
           --include-data-files=nox/info.cfg=nox/info.cfg 
@@ -59,7 +57,6 @@ jobs:
         run: >
           python -m nuitka --onefile --standalone --assume-yes-for-downloads 
           --output-dir=dist --output-filename=nox 
-          --plugin-enable=qt-plugins
           --include-package=nox --include-package=rich 
           --nofollow-import-to=numba 
           --include-data-files=nox/info.cfg=nox/info.cfg 
