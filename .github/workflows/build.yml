@@ -30,10 +30,25 @@ jobs:
           --include-data-files=nox/info.cfg=nox/info.cfg 
           --python-flag=-m nox
 
+      - name: Prepare Release Folder
+        shell: bash
+        run: |
+          mkdir -p release_win
+          cp dist/nox.exe release_win/
+          [ -d "documentation" ] && cp -r documentation release_win/
+          [ -d "Libraries" ] && cp -r Libraries release_win/
+
+      - name: Create Zip (Windows)
+        uses: thedoctor0/zip-release@main
+        with:
+          type: 'zip'
+          filename: 'nox_windows.zip'
+          directory: 'release_win'
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/nox.exe
+          files: nox_windows.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -61,7 +76,21 @@ jobs:
           --include-data-files=nox/info.cfg=nox/info.cfg 
           --python-flag=-m nox
 
+      - name: Prepare Release Folder
+        run: |
+          mkdir -p release_linux
+          cp dist/nox release_linux/
+          [ -d "documentation" ] && cp -r documentation release_linux/
+          [ -d "Libraries" ] && cp -r Libraries release_linux/
+
+      - name: Create Zip (Linux)
+        uses: thedoctor0/zip-release@main
+        with:
+          type: 'zip'
+          filename: 'nox_linux.zip'
+          directory: 'release_linux'
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/nox
+          files: nox_linux.zip
