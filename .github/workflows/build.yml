@@ -15,13 +15,13 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install nuitka ordered-set rich
-
+        run: pip install nuitka ordered-set rich zstandard
+      
       - name: Build with Nuitka
-        run: python -m nuitka --onefile --standalone --output-filename=nox.exe --output-dir=dist --include-package=nox nox/__main__.py
+        run: python -m nuitka --onefile --standalone --output-filename=nox.exe --output-dir=dist --include-package=nox --assume-yes-for-downloads nox/__main__.py
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
@@ -41,12 +41,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install nuitka ordered-set rich
+          pip install nuitka ordered-set rich zstandard
           sudo apt-get install -y patchelf
 
       - name: Build with Nuitka
-        run: python -m nuitka --onefile --standalone --output-filename=nox --output-dir=dist --include-package=nox nox/__main__.py
-
+        run: python -m nuitka --onefile --standalone --output-filename=nox --output-dir=dist --include-package=nox --assume-yes-for-downloads nox/__main__.py
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
