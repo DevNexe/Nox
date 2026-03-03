@@ -1,0 +1,4 @@
+name = "NoxGL"
+version = "0.1.0"
+entry = "main.nox"
+description = "Simple OpenGL wrapper for Nox (GLFW backend)"

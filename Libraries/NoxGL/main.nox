@@ -1,0 +1,789 @@
+# NoxGL
+# Modern OpenGL toolkit for Nox (shaders, VAO/VBO, textures, input, matrices, diagnostics).
+
+GL_COLOR_BUFFER_BIT = 16384
+GL_DEPTH_BUFFER_BIT = 256
+GL_NO_ERROR = 0
+
+GL_VERTEX_SHADER = 35633
+GL_FRAGMENT_SHADER = 35632
+GL_COMPILE_STATUS = 35713
+GL_LINK_STATUS = 35714
+GL_INFO_LOG_LENGTH = 35716
+
+GL_ARRAY_BUFFER = 34962
+GL_ELEMENT_ARRAY_BUFFER = 34963
+GL_STATIC_DRAW = 35044
+GL_DYNAMIC_DRAW = 35048
+GL_FLOAT = 5126
+GL_UNSIGNED_INT = 5125
+GL_TRIANGLES = 4
+GL_LINES = 1
+GL_POINTS = 0
+
+GL_TEXTURE_2D = 3553
+GL_TEXTURE0 = 33984
+GL_TEXTURE_MIN_FILTER = 10241
+GL_TEXTURE_MAG_FILTER = 10240
+GL_TEXTURE_WRAP_S = 10242
+GL_TEXTURE_WRAP_T = 10243
+GL_NEAREST = 9728
+GL_LINEAR = 9729
+GL_REPEAT = 10497
+GL_RGBA = 6408
+GL_UNSIGNED_BYTE = 5121
+
+GL_BLEND = 3042
+GL_DEPTH_TEST = 2929
+GL_SRC_ALPHA = 770
+GL_ONE_MINUS_SRC_ALPHA = 771
+
+GLFW_PRESS = 1
+GLFW_RELEASE = 0
+GLFW_REPEAT = 2
+GLFW_CURSOR = 208897
+GLFW_CURSOR_NORMAL = 212993
+GLFW_CURSOR_DISABLED = 212995
+
+define _radians(deg):
+    result deg * math.pi / 180.0
+
+define vec3(x, y, z):
+    result [x, y, z]
+
+define v3_add(a, b):
+    result [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+
+define v3_sub(a, b):
+    result [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+
+define v3_dot(a, b):
+    result a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+define v3_cross(a, b):
+    result [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ]
+
+define v3_norm(a):
+    l = math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+    if l == 0:
+        result [0.0, 0.0, 0.0]
+    result [a[0] / l, a[1] / l, a[2] / l]
+
+define mat4_identity():
+    result [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+define mat4_mul(a, b):
+    out = [
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0
+    ]
+    for row in range(4):
+        for col in range(4):
+            i = row * 4 + col
+            out[i] = (
+                a[row * 4 + 0] * b[0 * 4 + col] +
+                a[row * 4 + 1] * b[1 * 4 + col] +
+                a[row * 4 + 2] * b[2 * 4 + col] +
+                a[row * 4 + 3] * b[3 * 4 + col]
+            )
+    result out
+
+define mat4_translate(x, y, z):
+    m = mat4_identity()
+    m[3] = x
+    m[7] = y
+    m[11] = z
+    result m
+
+define mat4_scale(x, y, z):
+    m = mat4_identity()
+    m[0] = x
+    m[5] = y
+    m[10] = z
+    result m
+
+define mat4_rotate_z(rad):
+    c = math.cos(rad)
+    s = math.sin(rad)
+    result [
+        c, -s, 0.0, 0.0,
+        s, c, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+define mat4_rotate_x(rad):
+    c = math.cos(rad)
+    s = math.sin(rad)
+    result [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, c, -s, 0.0,
+        0.0, s, c, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+define mat4_rotate_y(rad):
+    c = math.cos(rad)
+    s = math.sin(rad)
+    result [
+        c, 0.0, s, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        -s, 0.0, c, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+define mat4_ortho(left, right, bottom, top, near, far):
+    rl = right - left
+    tb = top - bottom
+    fn = far - near
+    result [
+        2.0 / rl, 0.0, 0.0, -(right + left) / rl,
+        0.0, 2.0 / tb, 0.0, -(top + bottom) / tb,
+        0.0, 0.0, -2.0 / fn, -(far + near) / fn,
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+define mat4_perspective(fov_deg, aspect, near, far):
+    f = 1.0 / math.tan(_radians(fov_deg) / 2.0)
+    nf = 1.0 / (near - far)
+    result [
+        f / aspect, 0.0, 0.0, 0.0,
+        0.0, f, 0.0, 0.0,
+        0.0, 0.0, (far + near) * nf, 2.0 * far * near * nf,
+        0.0, 0.0, -1.0, 0.0
+    ]
+
+define mat4_look_at(eye, target, up):
+    z = v3_norm(v3_sub(eye, target))
+    x = v3_norm(v3_cross(up, z))
+    y = v3_cross(z, x)
+    result [
+        x[0], x[1], x[2], -v3_dot(x, eye),
+        y[0], y[1], y[2], -v3_dot(y, eye),
+        z[0], z[1], z[2], -v3_dot(z, eye),
+        0.0, 0.0, 0.0, 1.0
+    ]
+
+class Camera2D:
+    define init(self):
+        self.position = [0.0, 0.0]
+        self.zoom = 1.0
+        self.rotation = 0.0
+
+    define matrix(self, width, height):
+        proj = mat4_ortho(0.0, width, height, 0.0, -1.0, 1.0)
+        t = mat4_translate(-self.position[0], -self.position[1], 0.0)
+        r = mat4_rotate_z(_radians(self.rotation))
+        s = mat4_scale(self.zoom, self.zoom, 1.0)
+        result mat4_mul(proj, mat4_mul(r, mat4_mul(s, t)))
+
+class Camera3D:
+    define init(self):
+        self.eye = vec3(0.0, 0.0, 3.0)
+        self.target = vec3(0.0, 0.0, 0.0)
+        self.up = vec3(0.0, 1.0, 0.0)
+        self.fov = 60.0
+        self.near = 0.1
+        self.far = 100.0
+        self.yaw = -90.0
+        self.pitch = 0.0
+        self.update_target()
+
+    define view_matrix(self):
+        result mat4_look_at(self.eye, self.target, self.up)
+
+    define projection_matrix(self, aspect):
+        result mat4_perspective(self.fov, aspect, self.near, self.far)
+
+    define forward(self):
+        cy = math.cos(_radians(self.yaw))
+        sy = math.sin(_radians(self.yaw))
+        cp = math.cos(_radians(self.pitch))
+        sp = math.sin(_radians(self.pitch))
+        result v3_norm([cy * cp, sp, sy * cp])
+
+    define right(self):
+        result v3_norm(v3_cross(self.forward(), self.up))
+
+    define update_target(self):
+        self.target = v3_add(self.eye, self.forward())
+
+    define move_forward(self, amount):
+        f = self.forward()
+        self.eye = v3_add(self.eye, [f[0] * amount, f[1] * amount, f[2] * amount])
+        self.update_target()
+
+    define move_right(self, amount):
+        r = self.right()
+        self.eye = v3_add(self.eye, [r[0] * amount, r[1] * amount, r[2] * amount])
+        self.update_target()
+
+class App:
+    define init(self, title="NoxGL", width=1280, height=720):
+        self.title = title
+        self.width = width
+        self.height = height
+        self.ready = false
+        self._glfw = none
+        self._gl = none
+        self._window = none
+        self._key_handlers = {}
+        self._mouse_handlers = {}
+        self._cursor_handler = none
+        self._key_prev = {}
+        self._mouse_prev = {}
+        self._last_mouse = [0.0, 0.0]
+        self._p_glCreateShader = none
+        self._p_glShaderSource = none
+        self._p_glCompileShader = none
+        self._p_glGetShaderiv = none
+        self._p_glGetShaderInfoLog = none
+        self._p_glDeleteShader = none
+        self._p_glCreateProgram = none
+        self._p_glAttachShader = none
+        self._p_glLinkProgram = none
+        self._p_glGetProgramiv = none
+        self._p_glGetProgramInfoLog = none
+        self._p_glUseProgram = none
+        self._p_glDeleteProgram = none
+        self._p_glGenVertexArrays = none
+        self._p_glBindVertexArray = none
+        self._p_glDeleteVertexArrays = none
+        self._p_glGenBuffers = none
+        self._p_glBindBuffer = none
+        self._p_glBufferData = none
+        self._p_glDeleteBuffers = none
+        self._p_glEnableVertexAttribArray = none
+        self._p_glVertexAttribPointer = none
+        self._p_glGetUniformLocation = none
+        self._p_glUniformMatrix4fv = none
+        self._p_glUniform1i = none
+        self._p_glUniform1f = none
+        self._p_glUniform2f = none
+        self._p_glUniform3f = none
+        self._p_glUniform4f = none
+        self._p_glGenTextures = none
+        self._p_glBindTexture = none
+        self._p_glTexParameteri = none
+        self._p_glTexImage2D = none
+        self._p_glGenerateMipmap = none
+        self._p_glActiveTexture = none
+        self._p_glDeleteTextures = none
+        self._p_glDrawArrays = none
+        self._p_glDrawElements = none
+        self._p_glEnable = none
+        self._p_glDisable = none
+
+        try:
+            self._glfw = clib.load("glfw3.h")
+        except:
+            try:
+                self._glfw = clib.load("libglfw.so.3.h")
+            except:
+                display("NoxGL: failed to load GLFW runtime")
+                result
+
+        try:
+            self._gl = clib.load("opengl32.h")
+        except:
+            try:
+                self._gl = clib.load("opengl_macos.h")
+            except:
+                try:
+                    self._gl = clib.load("libGL.so.1.h")
+                except:
+                    display("NoxGL: failed to load OpenGL runtime")
+                    result
+
+        ok = clib.call(self._glfw, "glfwInit")
+        if ok == 0:
+            display("NoxGL: glfwInit failed")
+            result
+
+        self._window = clib.call(self._glfw, "glfwCreateWindow", width, height, title, none, none)
+        if self._window == none or self._window == 0:
+            display("NoxGL: glfwCreateWindow failed")
+            clib.call(self._glfw, "glfwTerminate")
+            result
+
+        clib.call(self._glfw, "glfwMakeContextCurrent", self._window)
+        clib.call(self._glfw, "glfwSwapInterval", 1)
+        self._load_modern_gl()
+        self.ready = true
+
+    define _gl_proc(self, name, restype=none, argtypes=[]):
+        addr = clib.call(self._glfw, "glfwGetProcAddress", name)
+        if addr == none or addr == 0:
+            result none
+        try:
+            result clib.make_func(addr, restype, argtypes)
+        except:
+            result none
+
+    define _load_modern_gl(self):
+        self._p_glCreateShader = self._gl_proc("glCreateShader", clib.c_uint, [clib.c_uint])
+        self._p_glShaderSource = self._gl_proc("glShaderSource", none, [clib.c_uint, clib.c_int, clib.c_void_p, clib.c_void_p])
+        self._p_glCompileShader = self._gl_proc("glCompileShader", none, [clib.c_uint])
+        self._p_glGetShaderiv = self._gl_proc("glGetShaderiv", none, [clib.c_uint, clib.c_uint, clib.c_void_p])
+        self._p_glGetShaderInfoLog = self._gl_proc("glGetShaderInfoLog", none, [clib.c_uint, clib.c_int, clib.c_void_p, clib.c_void_p])
+        self._p_glDeleteShader = self._gl_proc("glDeleteShader", none, [clib.c_uint])
+        self._p_glCreateProgram = self._gl_proc("glCreateProgram", clib.c_uint, [])
+        self._p_glAttachShader = self._gl_proc("glAttachShader", none, [clib.c_uint, clib.c_uint])
+        self._p_glLinkProgram = self._gl_proc("glLinkProgram", none, [clib.c_uint])
+        self._p_glGetProgramiv = self._gl_proc("glGetProgramiv", none, [clib.c_uint, clib.c_uint, clib.c_void_p])
+        self._p_glGetProgramInfoLog = self._gl_proc("glGetProgramInfoLog", none, [clib.c_uint, clib.c_int, clib.c_void_p, clib.c_void_p])
+        self._p_glUseProgram = self._gl_proc("glUseProgram", none, [clib.c_uint])
+        self._p_glDeleteProgram = self._gl_proc("glDeleteProgram", none, [clib.c_uint])
+        self._p_glGenVertexArrays = self._gl_proc("glGenVertexArrays", none, [clib.c_int, clib.c_void_p])
+        self._p_glBindVertexArray = self._gl_proc("glBindVertexArray", none, [clib.c_uint])
+        self._p_glDeleteVertexArrays = self._gl_proc("glDeleteVertexArrays", none, [clib.c_int, clib.c_void_p])
+        self._p_glGenBuffers = self._gl_proc("glGenBuffers", none, [clib.c_int, clib.c_void_p])
+        self._p_glBindBuffer = self._gl_proc("glBindBuffer", none, [clib.c_uint, clib.c_uint])
+        self._p_glBufferData = self._gl_proc("glBufferData", none, [clib.c_uint, clib.c_int, clib.c_void_p, clib.c_uint])
+        self._p_glDeleteBuffers = self._gl_proc("glDeleteBuffers", none, [clib.c_int, clib.c_void_p])
+        self._p_glEnableVertexAttribArray = self._gl_proc("glEnableVertexAttribArray", none, [clib.c_uint])
+        self._p_glVertexAttribPointer = self._gl_proc("glVertexAttribPointer", none, [clib.c_uint, clib.c_int, clib.c_uint, clib.c_ubyte, clib.c_int, clib.c_void_p])
+        self._p_glGetUniformLocation = self._gl_proc("glGetUniformLocation", clib.c_int, [clib.c_uint, clib.c_char_p])
+        self._p_glUniformMatrix4fv = self._gl_proc("glUniformMatrix4fv", none, [clib.c_int, clib.c_int, clib.c_ubyte, clib.c_void_p])
+        self._p_glUniform1i = self._gl_proc("glUniform1i", none, [clib.c_int, clib.c_int])
+        self._p_glUniform1f = self._gl_proc("glUniform1f", none, [clib.c_int, clib.c_float])
+        self._p_glUniform2f = self._gl_proc("glUniform2f", none, [clib.c_int, clib.c_float, clib.c_float])
+        self._p_glUniform3f = self._gl_proc("glUniform3f", none, [clib.c_int, clib.c_float, clib.c_float, clib.c_float])
+        self._p_glUniform4f = self._gl_proc("glUniform4f", none, [clib.c_int, clib.c_float, clib.c_float, clib.c_float, clib.c_float])
+        self._p_glGenTextures = self._gl_proc("glGenTextures", none, [clib.c_int, clib.c_void_p])
+        self._p_glBindTexture = self._gl_proc("glBindTexture", none, [clib.c_uint, clib.c_uint])
+        self._p_glTexParameteri = self._gl_proc("glTexParameteri", none, [clib.c_uint, clib.c_uint, clib.c_int])
+        self._p_glTexImage2D = self._gl_proc("glTexImage2D", none, [clib.c_uint, clib.c_int, clib.c_int, clib.c_int, clib.c_int, clib.c_int, clib.c_uint, clib.c_uint, clib.c_void_p])
+        self._p_glGenerateMipmap = self._gl_proc("glGenerateMipmap", none, [clib.c_uint])
+        self._p_glActiveTexture = self._gl_proc("glActiveTexture", none, [clib.c_uint])
+        self._p_glDeleteTextures = self._gl_proc("glDeleteTextures", none, [clib.c_int, clib.c_void_p])
+        self._p_glDrawArrays = self._gl_proc("glDrawArrays", none, [clib.c_uint, clib.c_int, clib.c_int])
+        self._p_glDrawElements = self._gl_proc("glDrawElements", none, [clib.c_uint, clib.c_int, clib.c_uint, clib.c_void_p])
+        self._p_glEnable = self._gl_proc("glEnable", none, [clib.c_uint])
+        self._p_glDisable = self._gl_proc("glDisable", none, [clib.c_uint])
+
+    define _need_gl(self, fn, name):
+        if fn == none:
+            display("NoxGL: missing OpenGL symbol: " + name)
+            self.should_close(true)
+            result false
+        result true
+
+    define alive(self):
+        if not self.ready:
+            result false
+        closed = clib.call(self._glfw, "glfwWindowShouldClose", self._window)
+        result closed == 0
+
+    define should_close(self, value=true):
+        if not self.ready:
+            result
+        v = 0
+        if value:
+            v = 1
+        clib.call(self._glfw, "glfwSetWindowShouldClose", self._window, v)
+
+    define set_title(self, title):
+        if not self.ready:
+            result
+        self.title = title
+        clib.call(self._glfw, "glfwSetWindowTitle", self._window, title)
+
+    define set_cursor_mode(self, mode):
+        if not self.ready:
+            result
+        clib.call(self._glfw, "glfwSetInputMode", self._window, GLFW_CURSOR, mode)
+
+    define cursor_disabled(self, value=true):
+        if value:
+            self.set_cursor_mode(GLFW_CURSOR_DISABLED)
+        else:
+            self.set_cursor_mode(GLFW_CURSOR_NORMAL)
+
+    define begin(self, r=0.08, g=0.09, b=0.12, a=1.0):
+        if not self.ready:
+            result
+        w = clib.int_ref(self.width)
+        h = clib.int_ref(self.height)
+        clib.call(self._glfw, "glfwGetFramebufferSize", self._window, clib.pointer(w), clib.pointer(h))
+        self.width = clib.deref(w)
+        self.height = clib.deref(h)
+        clib.call(self._gl, "glViewport", 0, 0, self.width, self.height)
+        clib.call(self._gl, "glClearColor", r, g, b, a)
+        clib.call(self._gl, "glClear", GL_COLOR_BUFFER_BIT + GL_DEPTH_BUFFER_BIT)
+
+    define end(self):
+        if not self.ready:
+            result
+        clib.call(self._glfw, "glfwSwapBuffers", self._window)
+        clib.call(self._glfw, "glfwPollEvents")
+        self._dispatch_input()
+
+    define run(self, frame_fn):
+        if not self.ready:
+            result
+        repeat self.alive():
+            self.begin()
+            frame_fn(self)
+            self.end()
+        self.close()
+
+    define close(self):
+        if self._window != none and self._window != 0:
+            clib.call(self._glfw, "glfwDestroyWindow", self._window)
+        if self._glfw != none:
+            clib.call(self._glfw, "glfwTerminate")
+        self.ready = false
+
+    define on_key(self, key, handler):
+        self._key_handlers[key] = handler
+        self._key_prev[key] = GLFW_RELEASE
+
+    define on_mouse(self, button, handler):
+        self._mouse_handlers[button] = handler
+        self._mouse_prev[button] = GLFW_RELEASE
+
+    define on_cursor(self, handler):
+        self._cursor_handler = handler
+
+    define key_down(self, key):
+        s = clib.call(self._glfw, "glfwGetKey", self._window, key)
+        result s == GLFW_PRESS or s == GLFW_REPEAT
+
+    define mouse_down(self, button):
+        s = clib.call(self._glfw, "glfwGetMouseButton", self._window, button)
+        result s == GLFW_PRESS
+
+    define mouse_pos(self):
+        xr = clib.double_ref(0.0)
+        yr = clib.double_ref(0.0)
+        clib.call(self._glfw, "glfwGetCursorPos", self._window, clib.pointer(xr), clib.pointer(yr))
+        result [clib.deref(xr), clib.deref(yr)]
+
+    define _dispatch_input(self):
+        for key in self._key_handlers:
+            current = clib.call(self._glfw, "glfwGetKey", self._window, key)
+            prev = self._key_prev[key]
+            if current != prev:
+                self._key_handlers[key](self, key, current)
+                self._key_prev[key] = current
+
+        for button in self._mouse_handlers:
+            current = clib.call(self._glfw, "glfwGetMouseButton", self._window, button)
+            prev = self._mouse_prev[button]
+            if current != prev:
+                self._mouse_handlers[button](self, button, current)
+                self._mouse_prev[button] = current
+
+        if self._cursor_handler != none:
+            pos = self.mouse_pos()
+            dx = pos[0] - self._last_mouse[0]
+            dy = pos[1] - self._last_mouse[1]
+            if dx != 0.0 or dy != 0.0:
+                self._cursor_handler(self, pos[0], pos[1], dx, dy)
+            self._last_mouse = pos
+
+    define _compile_shader(self, kind, source):
+        if not self._need_gl(self._p_glCreateShader, "glCreateShader"):
+            result (0, "missing glCreateShader")
+        shader = self._p_glCreateShader(kind)
+        src = clib.c_string_array([source])
+        ln = clib.int_ref(len(source))
+        self._p_glShaderSource(shader, 1, src, clib.pointer(ln))
+        self._p_glCompileShader(shader)
+
+        status = clib.int_ref(0)
+        self._p_glGetShaderiv(shader, GL_COMPILE_STATUS, clib.pointer(status))
+        if clib.deref(status) == 0:
+            ll = clib.int_ref(0)
+            self._p_glGetShaderiv(shader, GL_INFO_LOG_LENGTH, clib.pointer(ll))
+            n = clib.deref(ll)
+            if n < 1:
+                n = 1
+            buf = clib.string_buffer(n + 1)
+            self._p_glGetShaderInfoLog(shader, n, none, buf)
+            msg = clib.buffer_text(buf)
+            self._p_glDeleteShader(shader)
+            result (0, msg)
+        result (shader, "")
+
+    define create_program(self, vertex_source, fragment_source):
+        vs = self._compile_shader(GL_VERTEX_SHADER, vertex_source)
+        if vs[0] == 0:
+            result {"ok": false, "id": 0, "log": "vertex shader: " + vs[1]}
+
+        fs = self._compile_shader(GL_FRAGMENT_SHADER, fragment_source)
+        if fs[0] == 0:
+            self._p_glDeleteShader(vs[0])
+            result {"ok": false, "id": 0, "log": "fragment shader: " + fs[1]}
+
+        if not self._need_gl(self._p_glCreateProgram, "glCreateProgram"):
+            result {"ok": false, "id": 0, "log": "missing glCreateProgram"}
+        program = self._p_glCreateProgram()
+        self._p_glAttachShader(program, vs[0])
+        self._p_glAttachShader(program, fs[0])
+        self._p_glLinkProgram(program)
+        self._p_glDeleteShader(vs[0])
+        self._p_glDeleteShader(fs[0])
+
+        status = clib.int_ref(0)
+        self._p_glGetProgramiv(program, GL_LINK_STATUS, clib.pointer(status))
+        if clib.deref(status) == 0:
+            ll = clib.int_ref(0)
+            self._p_glGetProgramiv(program, GL_INFO_LOG_LENGTH, clib.pointer(ll))
+            n = clib.deref(ll)
+            if n < 1:
+                n = 1
+            buf = clib.string_buffer(n + 1)
+            self._p_glGetProgramInfoLog(program, n, none, buf)
+            msg = clib.buffer_text(buf)
+            self._p_glDeleteProgram(program)
+            result {"ok": false, "id": 0, "log": msg}
+
+        result {"ok": true, "id": program, "log": ""}
+
+    define use_program(self, program):
+        self._p_glUseProgram(program)
+
+    define delete_program(self, program):
+        self._p_glDeleteProgram(program)
+
+    define uniform_location(self, program, name):
+        cname = clib.c_string(name)
+        result self._p_glGetUniformLocation(program, cname)
+
+    define uniform_mat4(self, program, name, matrix):
+        loc = self.uniform_location(program, name)
+        if loc < 0:
+            result
+        arr = clib.float_array(matrix)
+        # Matrices in NoxGL helpers are row-major, so transpose on upload.
+        self._p_glUniformMatrix4fv(loc, 1, 1, arr)
+
+    define uniform1i(self, program, name, value):
+        loc = self.uniform_location(program, name)
+        if loc < 0:
+            result
+        self._p_glUniform1i(loc, value)
+
+    define uniform1f(self, program, name, value):
+        loc = self.uniform_location(program, name)
+        if loc < 0:
+            result
+        self._p_glUniform1f(loc, value)
+
+    define create_vao(self):
+        r = clib.uint_ref(0)
+        self._p_glGenVertexArrays(1, clib.pointer(r))
+        result clib.deref(r)
+
+    define bind_vao(self, vao):
+        self._p_glBindVertexArray(vao)
+
+    define delete_vao(self, vao):
+        arr = clib.uint_array([vao])
+        self._p_glDeleteVertexArrays(1, arr)
+
+    define create_vbo_f32(self, values, usage=GL_STATIC_DRAW):
+        r = clib.uint_ref(0)
+        self._p_glGenBuffers(1, clib.pointer(r))
+        vbo = clib.deref(r)
+        arr = clib.float_array(values)
+        size_bytes = len(values) * 4
+        self._p_glBindBuffer(GL_ARRAY_BUFFER, vbo)
+        self._p_glBufferData(GL_ARRAY_BUFFER, size_bytes, arr, usage)
+        result vbo
+
+    define bind_vbo(self, vbo):
+        self._p_glBindBuffer(GL_ARRAY_BUFFER, vbo)
+
+    define delete_vbo(self, vbo):
+        arr = clib.uint_array([vbo])
+        self._p_glDeleteBuffers(1, arr)
+
+    define attrib(self, index, size, stride_floats, offset_floats, normalized=false):
+        norm = 0
+        if normalized:
+            norm = 1
+        stride = stride_floats * 4
+        offset = offset_floats * 4
+        self._p_glVertexAttribPointer(index, size, GL_FLOAT, norm, stride, offset)
+        self._p_glEnableVertexAttribArray(index)
+
+    define draw_arrays(self, mode, count, first=0):
+        self._p_glDrawArrays(mode, first, count)
+
+    define draw_elements(self, mode, index_count, index_type=GL_UNSIGNED_INT):
+        self._p_glDrawElements(mode, index_count, index_type, 0)
+
+    define enable(self, cap):
+        self._p_glEnable(cap)
+
+    define disable(self, cap):
+        self._p_glDisable(cap)
+
+    define enable_depth(self, value=true):
+        if value:
+            self.enable(GL_DEPTH_TEST)
+        else:
+            self.disable(GL_DEPTH_TEST)
+
+    define create_texture_rgba(self, width, height, rgba_pixels, linear=true, mipmap=true):
+        r = clib.uint_ref(0)
+        self._p_glGenTextures(1, clib.pointer(r))
+        tex = clib.deref(r)
+        self._p_glBindTexture(GL_TEXTURE_2D, tex)
+        self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        if linear:
+            self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        else:
+            self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            self._p_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        buf = clib.byte_array(rgba_pixels)
+        self._p_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, buf)
+        if mipmap:
+            self._p_glGenerateMipmap(GL_TEXTURE_2D)
+        result tex
+
+    define bind_texture(self, texture, unit=0):
+        self._p_glActiveTexture(GL_TEXTURE0 + unit)
+        self._p_glBindTexture(GL_TEXTURE_2D, texture)
+
+    define delete_texture(self, texture):
+        arr = clib.uint_array([texture])
+        self._p_glDeleteTextures(1, arr)
+
+    define create_ebo_u32(self, indices, usage=GL_STATIC_DRAW):
+        r = clib.uint_ref(0)
+        self._p_glGenBuffers(1, clib.pointer(r))
+        ebo = clib.deref(r)
+        arr = clib.uint_array(indices)
+        size_bytes = len(indices) * 4
+        self._p_glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+        self._p_glBufferData(GL_ELEMENT_ARRAY_BUFFER, size_bytes, arr, usage)
+        result ebo
+
+    define bind_ebo(self, ebo):
+        self._p_glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo)
+
+    define delete_ebo(self, ebo):
+        arr = clib.uint_array([ebo])
+        self._p_glDeleteBuffers(1, arr)
+
+    define gl_error_name(self, code):
+        if code == 0:
+            result "GL_NO_ERROR"
+        if code == 1280:
+            result "GL_INVALID_ENUM"
+        if code == 1281:
+            result "GL_INVALID_VALUE"
+        if code == 1282:
+            result "GL_INVALID_OPERATION"
+        if code == 1285:
+            result "GL_OUT_OF_MEMORY"
+        result "GL_ERROR_" + string.str(code)
+
+    define check_gl(self, label=""):
+        err = clib.call(self._gl, "glGetError")
+        if err == GL_NO_ERROR:
+            result false
+        if label != "":
+            display("NoxGL error at " + label)
+        repeat true:
+            if err == GL_NO_ERROR:
+                break
+            display("  -> " + self.gl_error_name(err))
+            err = clib.call(self._gl, "glGetError")
+        result true
+
+class Mesh:
+    define init(self, app, vao, vbo, vertex_count, mode=GL_TRIANGLES):
+        self.app = app
+        self.vao = vao
+        self.vbo = vbo
+        self.vertex_count = vertex_count
+        self.mode = mode
+
+    define draw(self):
+        self.app.bind_vao(self.vao)
+        self.app.draw_arrays(self.mode, self.vertex_count, 0)
+
+    define destroy(self):
+        self.app.delete_vbo(self.vbo)
+        self.app.delete_vao(self.vao)
+
+class IndexedMesh:
+    define init(self, app, vao, vbo, ebo, index_count, mode=GL_TRIANGLES):
+        self.app = app
+        self.vao = vao
+        self.vbo = vbo
+        self.ebo = ebo
+        self.index_count = index_count
+        self.mode = mode
+
+    define draw(self):
+        self.app.bind_vao(self.vao)
+        self.app.bind_ebo(self.ebo)
+        self.app.draw_elements(self.mode, self.index_count, GL_UNSIGNED_INT)
+
+    define destroy(self):
+        self.app.delete_ebo(self.ebo)
+        self.app.delete_vbo(self.vbo)
+        self.app.delete_vao(self.vao)
+
+define create_mesh_f32(app, vertices, layout):
+    vao = app.create_vao()
+    app.bind_vao(vao)
+    vbo = app.create_vbo_f32(vertices, GL_STATIC_DRAW)
+    offset = 0
+    stride = 0
+    for n in layout:
+        stride = stride + n
+    index = 0
+    for n in layout:
+        app.attrib(index, n, stride, offset, false)
+        index = index + 1
+        offset = offset + n
+    vertex_count = math.floor(len(vertices) / stride)
+    result Mesh(app, vao, vbo, vertex_count, GL_TRIANGLES)
+
+define create_indexed_mesh_f32(app, vertices, layout, indices):
+    vao = app.create_vao()
+    app.bind_vao(vao)
+    vbo = app.create_vbo_f32(vertices, GL_STATIC_DRAW)
+    ebo = app.create_ebo_u32(indices, GL_STATIC_DRAW)
+    offset = 0
+    stride = 0
+    for n in layout:
+        stride = stride + n
+    index = 0
+    for n in layout:
+        app.attrib(index, n, stride, offset, false)
+        index = index + 1
+        offset = offset + n
+    result IndexedMesh(app, vao, vbo, ebo, len(indices), GL_TRIANGLES)
+
+define create(title="NoxGL", width=1280, height=720):
+    result App(title, width, height)
+
+define camera2d():
+    result Camera2D()
+
+define camera3d():
+    result Camera3D()
+
+define rgb(r, g, b):
+    result (r / 255.0, g / 255.0, b / 255.0)

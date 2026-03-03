@@ -1,0 +1,17 @@
+﻿int glfwInit(void);
+void glfwTerminate(void);
+void* glfwCreateWindow(int width, int height, const char* title, void* monitor, void* share);
+void glfwDestroyWindow(void* window);
+void glfwSetWindowTitle(void* window, const char* title);
+void glfwMakeContextCurrent(void* window);
+void glfwSwapBuffers(void* window);
+void glfwPollEvents(void);
+int glfwWindowShouldClose(void* window);
+void glfwSetWindowShouldClose(void* window, int value);
+void glfwSwapInterval(int interval);
+int glfwGetKey(void* window, int key);
+int glfwGetMouseButton(void* window, int button);
+void glfwGetCursorPos(void* window, double* xpos, double* ypos);
+void glfwSetInputMode(void* window, int mode, int value);
+void glfwGetFramebufferSize(void* window, int* width, int* height);
+void* glfwGetProcAddress(const char* procname);
