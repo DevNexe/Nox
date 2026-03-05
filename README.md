@@ -27,7 +27,7 @@ It has classes, traits, structs, async/await, decorators, pattern matching, C/C+
 **Requires Python 3.8+**
 
 ```bash
-git clone https://github.com/devnexe-alt/nox
+git clone https://github.com/devnexe/nox
 cd nox
 python setup.py
 ```
