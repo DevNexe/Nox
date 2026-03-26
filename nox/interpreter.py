@@ -54,6 +54,7 @@ from .ast_nodes import (
     Var,
     While,
     StructInit,
+    ExprStmt,
 )
 from .errors import (
     NoxRuntimeError,
@@ -346,6 +347,16 @@ class Interpreter:
     def run(self, program: Program) -> None:
         for stmt in program.statements:
             self._exec_with_loc(stmt)
+
+    def run_repl(self, program: Program) -> Any:
+        result: Any = None
+        for stmt in program.statements:
+            if isinstance(stmt, ExprStmt):
+                result = self._eval(stmt.expr)
+            else:
+                self._exec_with_loc(stmt)
+                result = None
+        return result
 
     def _resolve_fs_path(self, path: str) -> Path:
         p = Path(path)

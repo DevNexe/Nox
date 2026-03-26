@@ -7,6 +7,7 @@ from .lexer import Lexer
 from .parser import Parser
 from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
+from . import __version__
 import sys
 from rich.console import Console
 from rich.text import Text
@@ -110,6 +111,150 @@ def run_source(source: str, base_dir: Path | None = None, current_file: Path | N
     tokens = Lexer(source).tokenize()
     program = Parser(tokens).parse()
     Interpreter(base_dir=base_dir, current_file=current_file).run(program)
+
+
+def _indent_width(line: str) -> int:
+    width = 0
+    for ch in line:
+        if ch == " ":
+            width += 1
+        elif ch == "\t":
+            width += 4 - (width % 4)
+        else:
+            break
+    return width
+
+
+def _repl_continuation_kind(lines: list[str]) -> str | None:
+    headers: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if _indent_width(line) != 0:
+            continue
+        headers.append(stripped)
+
+    if not headers:
+        return None
+
+    first = headers[0]
+    last = headers[-1]
+
+    if first.startswith("if "):
+        if last.startswith("else:"):
+            return None
+        return "if"
+
+    if first == "try:":
+        if last.startswith("finally:"):
+            return None
+        return "try"
+
+    return None
+
+
+def _is_repl_continuation(stripped: str, kind: str | None) -> bool:
+    if kind == "if":
+        return stripped.startswith("else if ") or stripped == "else:"
+    if kind == "try":
+        return stripped == "except:" or stripped == "finally:"
+    return False
+
+
+def _print_repl_help() -> None:
+    console.print("REPL commands:")
+    console.print("  help  Show this help")
+    console.print("  quit  Exit the REPL")
+    console.print("  exit  Exit the REPL")
+    console.print("Tips:")
+    console.print("  Expressions print their result automatically.")
+    console.print("  After block bodies, press Enter to continue with else/else if/except/finally.")
+    console.print("  Press Enter again to execute the block if there is no continuation.")
+
+
+def _run_repl() -> int:
+    console.print(f"Nox {__version__}")
+    console.print("Use help for commands, quit or exit to leave.")
+
+    interpreter = Interpreter(base_dir=Path.cwd(), current_file=Path("<repl>"))
+    primary_prompt = ">>> "
+    secondary_prompt = "... "
+    carry_line: str | None = None
+
+    while True:
+        try:
+            lines: list[str] = []
+            prompt = primary_prompt
+            expecting_block = False
+            continuation_kind: str | None = None
+            waiting_for_continuation = False
+
+            while True:
+                if carry_line is not None:
+                    line = carry_line
+                    carry_line = None
+                else:
+                    line = input(prompt)
+                stripped = line.strip()
+
+                if not lines and stripped in {"quit", "exit"}:
+                    return 0
+                if not lines and stripped == "help":
+                    _print_repl_help()
+                    break
+                if not lines and stripped == "":
+                    break
+
+                if waiting_for_continuation:
+                    if stripped == "":
+                        break
+                    if not _is_repl_continuation(stripped, continuation_kind):
+                        carry_line = line
+                        break
+                    waiting_for_continuation = False
+                    expecting_block = False
+
+                if expecting_block and stripped and not line[:1].isspace():
+                    line = "    " + line
+
+                if stripped == "":
+                    continuation_kind = _repl_continuation_kind(lines)
+                    if continuation_kind is not None:
+                        waiting_for_continuation = True
+                        prompt = secondary_prompt
+                        continue
+                    break
+
+                lines.append(line)
+                prompt = secondary_prompt
+                expecting_block = line.rstrip().endswith(":")
+                if expecting_block:
+                    continue
+                if len(lines) == 1:
+                    break
+
+            if not lines:
+                continue
+
+            tokens = Lexer("\n".join(lines)).tokenize()
+            program = Parser(tokens).parse()
+            result = interpreter.run_repl(program)
+            if result is not None:
+                console.print(repr(result))
+        except EOFError:
+            console.print()
+            return 0
+        except KeyboardInterrupt:
+            console.print()
+            continue
+        except NoxSyntaxError as exc:
+            _print_error("SyntaxError", str(exc))
+        except NoxRuntimeError as exc:
+            error_name = getattr(exc, "display_name", "RuntimeError")
+            _print_error(error_name, str(exc))
+        except Exception as exc:
+            _print_error("Internal Error", str(exc))
 
 def _resolve_run_target(path: str, cwd: Optional[Path] = None) -> Path:
     base = cwd or Path.cwd()
@@ -337,6 +482,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     run_parser = subparsers.add_parser("run", help="Run a .nox script or folder")
     run_parser.add_argument("file", help="Path to .nox file or folder")
+    subparsers.add_parser("repl", help="Start the Nox REPL")
 
     pkg_parser = subparsers.add_parser("package", help="Manage Nox libraries")
     pkg_sub = pkg_parser.add_subparsers(dest="pkg_command")
@@ -350,7 +496,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     pkg_remove.add_argument("name", help="Library name")
 
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
-    if raw_argv and raw_argv[0] not in {"run", "package"} and not raw_argv[0].startswith("-"):
+    if raw_argv and raw_argv[0] not in {"run", "package", "repl"} and not raw_argv[0].startswith("-"):
         raw_argv = ["run", *raw_argv]
     args = parser.parse_args(raw_argv)
 
@@ -359,8 +505,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 0
 
     if args.command is None:
-        parser.print_usage()
-        return 0
+        return _run_repl()
 
     if args.command == "package":
         try:
@@ -374,6 +519,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         except Exception as exc:
             _print_error("RuntimeError", str(exc))
             return 3
+
+    if args.command == "repl":
+        return _run_repl()
 
     file_arg = args.file if args.command == "run" else None
     if file_arg is None:

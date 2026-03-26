@@ -67,7 +67,7 @@ class Lexer:
                 line_no += 1
                 continue
 
-            indent = self._count_indent(raw_line, line_no)
+            indent, indent_chars = self._count_indent(raw_line, line_no)
             if self.bracket_depth == 0:
                 if indent > indent_stack[-1]:
                     indent_stack.append(indent)
@@ -79,7 +79,12 @@ class Lexer:
                     if indent != indent_stack[-1]:
                         raise NoxSyntaxError("Indentation error", line_no, 1)
 
-            line_tokens, end_index, end_line_no, end_line_len = self._lex_line(lines, line_index, line_no, indent)
+            line_tokens, end_index, end_line_no, end_line_len = self._lex_line(
+                lines,
+                line_index,
+                line_no,
+                indent_chars,
+            )
             tokens.extend(line_tokens)
             tokens.append(Token(TokenType.NEWLINE, None, end_line_no, end_line_len + 1))
             line_index = end_index + 1
@@ -92,16 +97,19 @@ class Lexer:
         tokens.append(Token(TokenType.EOF, None, line_no + 1, 1))
         return tokens
 
-    def _count_indent(self, line: str, line_no: int) -> int:
+    def _count_indent(self, line: str, line_no: int) -> tuple[int, int]:
         count = 0
+        raw_chars = 0
         for ch in line:
             if ch == " ":
                 count += 1
+                raw_chars += 1
             elif ch == "\t":
-                raise NoxSyntaxError("Tabs are not allowed for indentation", line_no, count + 1)
+                count += 4 - (count % 4)
+                raw_chars += 1
             else:
                 break
-        return count
+        return count, raw_chars
 
     def _lex_line(
         self,
