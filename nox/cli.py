@@ -11,6 +11,17 @@ from . import __version__
 import sys
 from rich.console import Console
 from rich.text import Text
+import ssl as _ssl
+_ctx = _ssl.create_default_context()
+_ctx.check_hostname = False
+_ctx.verify_mode = _ssl.CERT_NONE
+
+_ERR_MARKER = ">"
+try:
+    "❱".encode(sys.stdout.encoding or "utf-8")
+    _ERR_MARKER = "❱"
+except (UnicodeEncodeError, LookupError):
+    pass
 
 def _ensure_utf8() -> None:
     import sys
@@ -325,7 +336,7 @@ def _render_traceback_panel(
     if lines:
         for ln, content in lines:
             is_err = (ln == highlight_line)
-            marker = "❱" if is_err else " "
+            marker = _ERR_MARKER if is_err else " "
             row = Text()
             if is_err:
                 row.append(f"    {marker} {ln}", style="bold red")
@@ -397,7 +408,10 @@ def _package_install(spec: str) -> int:
     downloaded = False
     for url in zip_urls:
         try:
-            urllib.request.urlretrieve(url, zip_path)
+            req = urllib.request.Request(url, headers={"User-Agent": "nox-package-manager"})
+            with urllib.request.urlopen(req, timeout=30, context=_ctx) as resp:
+                with open(zip_path, "wb") as f:
+                    f.write(resp.read())
             downloaded = True
             break
         except Exception:

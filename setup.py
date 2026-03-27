@@ -2,7 +2,11 @@
 
 import subprocess
 import sys
+import os
 from pathlib import Path
+
+if sys.platform == "win32":
+    os.system("")
 
 RESET  = "\033[0m"
 BOLD   = "\033[1m"

@@ -10,6 +10,10 @@ import urllib.error
 import sys
 import urllib.parse
 import json
+import ssl as _ssl
+_ssl_ctx = _ssl.create_default_context()
+_ssl_ctx.check_hostname = False
+_ssl_ctx.verify_mode = _ssl.CERT_NONE
 
 from .ast_nodes import (
     Assign,
@@ -837,7 +841,7 @@ class Interpreter:
 
         req = urllib.request.Request(url=url, data=body_bytes, method=method.upper(), headers=req_headers)
         try:
-            with urllib.request.urlopen(req, timeout=float(timeout)) as resp:
+            with urllib.request.urlopen(req, timeout=float(timeout), context=_ssl_ctx) as resp:
                 raw = resp.read()
                 text = raw.decode("utf-8", errors="replace")
                 out = {
