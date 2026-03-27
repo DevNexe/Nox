@@ -17,11 +17,6 @@ _ctx.check_hostname = False
 _ctx.verify_mode = _ssl.CERT_NONE
 
 _ERR_MARKER = ">"
-try:
-    "❱".encode(sys.stdout.encoding or "utf-8")
-    _ERR_MARKER = "❱"
-except (UnicodeEncodeError, LookupError):
-    pass
 
 def _ensure_utf8() -> None:
     import sys
@@ -49,7 +44,6 @@ def _ensure_utf8() -> None:
 
 
 _ensure_utf8()
-
 
 def _create_console() -> Console:
     import os
