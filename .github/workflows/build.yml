@@ -82,15 +82,15 @@ jobs:
           cp dist/nox release_linux/
           [ -d "documentation" ] && cp -r documentation release_linux/
           [ -d "Libraries" ] && cp -r Libraries release_linux/
-
+      
       - name: Create Zip (Linux)
         uses: thedoctor0/zip-release@main
         with:
-          type: 'zip'
-          filename: '../nox_linux.zip' # Создаем уровнем выше
+          type: 'tar'
+          filename: '../nox_linux.tar.gz'
           directory: 'release_linux'
-
+          
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: nox_linux.zip
+          files: nox_linux.tar.gz
