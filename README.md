@@ -344,7 +344,7 @@ Traceback:
   Error in main.nox at line 7 in process_data:
     5   items = [1, 2, 3]
     6
-  ❱  7   display items[10]
+  >  7   display items[10]
     8
 
 IndexError: list index out of range
