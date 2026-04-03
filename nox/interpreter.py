@@ -125,6 +125,46 @@ def _get_libraries_root():
         path = Path(__file__).resolve().parent.parent / "Libraries"
     return path
 
+
+def _read_simple_config(path: Path) -> dict[str, str]:
+    def _strip_inline_comment(text: str) -> str:
+        in_single = False
+        in_double = False
+        escaped = False
+        for idx, ch in enumerate(text):
+            if escaped:
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                continue
+            if ch == '"' and not in_single:
+                in_double = not in_double
+                continue
+            if ch == "#" and not in_single and not in_double:
+                return text[:idx].rstrip()
+        return text.rstrip()
+
+    data: dict[str, str] = {}
+    try:
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = _strip_inline_comment(raw).strip()
+            if not line or line.startswith("#") or line.startswith(";"):
+                continue
+            if "=" in line:
+                key, value = line.split("=", 1)
+            elif ":" in line:
+                key, value = line.split(":", 1)
+            else:
+                continue
+            data[key.strip().lower()] = value.strip().strip("'\"")
+    except OSError:
+        pass
+    return data
+
 @dataclass
 class Environment:
     values: Dict[str, Any]
@@ -1324,6 +1364,12 @@ class Interpreter:
         if libs_root.exists():
             lib_root = libs_root / module_parts[0]
             if len(module_parts) == 1:
+                nxinfo = lib_root / ".nxinfo"
+                if nxinfo.exists():
+                    meta = _read_simple_config(nxinfo)
+                    entry = meta.get("entry")
+                    if entry:
+                        candidates.append(lib_root / entry)
                 candidates.append(lib_root / f"{module_parts[0]}.nox")
                 candidates.append(lib_root / "main.nox")
                 candidates.append(lib_root / "__init__.nox")

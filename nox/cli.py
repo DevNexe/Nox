@@ -8,13 +8,10 @@ from .parser import Parser
 from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
 from . import __version__
+from . import package as package_manager
 import sys
 from rich.console import Console
 from rich.text import Text
-import ssl as _ssl
-_ctx = _ssl.create_default_context()
-_ctx.check_hostname = False
-_ctx.verify_mode = _ssl.CERT_NONE
 
 _ERR_MARKER = ">"
 
@@ -57,10 +54,6 @@ def _create_console() -> Console:
 
 console = _create_console()
 
-DEFAULT_GITHUB_USER = "devnexe-alt"
-LIBRARIES_DIRNAME = "Libraries"
-
-
 def _exe_dir() -> Path:
     try:
         import __compiled__  # type: ignore
@@ -68,15 +61,6 @@ def _exe_dir() -> Path:
         return Path(sys.executable).parent
     except ImportError:
         return Path(__file__).resolve().parent.parent
-
-
-def _libraries_root() -> Path:
-    exe = Path(sys.argv[0]).resolve()
-    if exe.suffix in (".exe",) or (not exe.suffix and exe.stat().st_mode & 0o111):
-        path = exe.parent / LIBRARIES_DIRNAME
-    else:
-        path = Path(__file__).resolve().parent.parent / LIBRARIES_DIRNAME
-    return path
 
 
 def _read_version_from_info_cfg() -> str:
@@ -345,133 +329,6 @@ def _print_error(title: str, message: str) -> None:
     console.print(f"[bold red]{title}:[/bold red] {message}")
 
 
-def _is_github_url(text: str) -> bool:
-    return "github.com/" in text.lower()
-
-
-def _normalize_repo_spec(spec: str) -> tuple[str, str]:
-    cleaned = spec.strip()
-
-    if _is_github_url(cleaned):
-        if cleaned.startswith("github.com/"):
-            cleaned = "https://" + cleaned
-        if cleaned.startswith("http://github.com/"):
-            cleaned = cleaned.replace("http://", "https://", 1)
-        if cleaned.startswith("https://github.com/"):
-            repo_url = cleaned
-        else:
-            repo_url = cleaned
-    else:
-        if "/" in cleaned:
-            repo_url = f"https://github.com/{cleaned}"
-        else:
-            repo_url = f"https://github.com/{DEFAULT_GITHUB_USER}/{cleaned}"
-
-    if repo_url.endswith(".git"):
-        repo_url = repo_url[:-4]
-
-    repo_name = repo_url.rstrip("/").split("/")[-1]
-    return repo_url, repo_name
-
-
-def _package_install(spec: str) -> int:
-    import shutil
-    import urllib.request
-    import zipfile
-
-    repo_url, repo_name = _normalize_repo_spec(spec)
-    libs_root = _libraries_root()
-    libs_root.mkdir(parents=True, exist_ok=True)
-    target_dir = libs_root / repo_name
-    tmp_root = libs_root / ".tmp"
-    tmp_root.mkdir(parents=True, exist_ok=True)
-    tmp_path = tmp_root / repo_name
-
-    if target_dir.exists():
-        raise RuntimeError(f"Library already installed: {repo_name}")
-
-    if tmp_path.exists():
-        shutil.rmtree(tmp_path, ignore_errors=True)
-
-    zip_path = tmp_root / f"{repo_name}.zip"
-    zip_urls = [
-        repo_url.rstrip("/") + "/archive/refs/heads/main.zip",
-        repo_url.rstrip("/") + "/archive/refs/heads/master.zip",
-    ]
-
-    downloaded = False
-    for url in zip_urls:
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "nox-package-manager"})
-            with urllib.request.urlopen(req, timeout=30, context=_ctx) as resp:
-                with open(zip_path, "wb") as f:
-                    f.write(resp.read())
-            downloaded = True
-            break
-        except Exception:
-            continue
-
-    if not downloaded:
-        raise RuntimeError("Failed to download repository (main/master not found)")
-
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(tmp_root)
-        extracted = next(tmp_root.glob(f"{repo_name}-*"), None)
-        if extracted is None or not extracted.exists():
-            raise RuntimeError("Failed to extract GitHub zip")
-        if tmp_path.exists():
-            shutil.rmtree(tmp_path, ignore_errors=True)
-        shutil.move(str(extracted), str(tmp_path))
-    finally:
-        if zip_path.exists():
-            zip_path.unlink(missing_ok=True)
-
-    nxinfo = tmp_path / ".nxinfo"
-    if not nxinfo.exists():
-        shutil.rmtree(tmp_path, ignore_errors=True)
-        raise RuntimeError("Not a Nox library: .nxinfo not found")
-
-    try:
-        shutil.move(str(tmp_path), str(target_dir))
-    finally:
-        if tmp_path.exists():
-            shutil.rmtree(tmp_path, ignore_errors=True)
-
-    git_dir = target_dir / ".git"
-    if git_dir.exists():
-        shutil.rmtree(git_dir, ignore_errors=True)
-
-    console.print(Text(f"Installed {repo_name} into {target_dir}", style="green"))
-    return 0
-
-
-def _package_list() -> int:
-    libs_root = _libraries_root()
-    if not libs_root.exists():
-        console.print(Text("No libraries installed.", style="yellow"))
-        return 0
-    items = [p.name for p in libs_root.iterdir() if p.is_dir()]
-    if not items:
-        console.print(Text("No libraries installed.", style="yellow"))
-        return 0
-    for name in sorted(items):
-        console.print(name)
-    return 0
-
-
-def _package_remove(name: str) -> int:
-    import shutil
-
-    libs_root = _libraries_root()
-    target_dir = libs_root / name
-    if not target_dir.exists():
-        raise RuntimeError(f"Library not found: {name}")
-    shutil.rmtree(target_dir)
-    console.print(Text(f"Removed {name}", style="green"))
-    return 0
-
-
 def main(argv: Optional[list[str]] = None) -> int:
     import argparse
     import contextlib
@@ -496,9 +353,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     pkg_sub = pkg_parser.add_subparsers(dest="pkg_command")
 
     pkg_install = pkg_sub.add_parser("install", help="Install a library from GitHub")
-    pkg_install.add_argument("spec", help="repo | user/repo | GitHub URL")
+    pkg_install.add_argument("specs", nargs="+", help="repo | user/repo | GitHub URL")
 
     pkg_sub.add_parser("list", help="List installed libraries")
+
+    pkg_desc = pkg_sub.add_parser("description", help="Show library description")
+    pkg_desc.add_argument("name", help="Library name")
+
+    pkg_desc_alias = pkg_sub.add_parser("desc", help="Alias for description")
+    pkg_desc_alias.add_argument("name", help="Library name")
 
     pkg_remove = pkg_sub.add_parser("remove", help="Remove an installed library")
     pkg_remove.add_argument("name", help="Library name")
@@ -518,11 +381,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "package":
         try:
             if args.pkg_command == "install":
-                return _package_install(args.spec)
+                return package_manager.install(args.specs)
             if args.pkg_command == "list":
-                return _package_list()
+                return package_manager.list_packages()
+            if args.pkg_command in {"description", "desc"}:
+                return package_manager.description(args.name)
             if args.pkg_command == "remove":
-                return _package_remove(args.name)
+                return package_manager.remove(args.name)
             raise RuntimeError("Unknown package command")
         except Exception as exc:
             _print_error("RuntimeError", str(exc))

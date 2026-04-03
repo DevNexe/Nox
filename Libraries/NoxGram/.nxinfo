@@ -1,3 +1,7 @@
-name=TGBot4Nox
-version=0.1.0
-description=Bot framework primitives for Nox
+﻿name = "NoxGram"
+version = "0.1.0"
+description = "README.md"
+entry = "main.nox"
+min_nox_version = "0.1.4"
+author = "DevNexe"
+license = "MIT"
