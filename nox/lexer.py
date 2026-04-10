@@ -309,6 +309,10 @@ class Lexer:
                     i += 1
                     tokens.append(Token(TokenType.DOT, ".", current_line_no, col))
                     continue
+                if ch == ";":
+                    i += 1
+                    tokens.append(Token(TokenType.SEMICOLON, ";", current_line_no, col))
+                    continue
                 if ch == "@":
                     i += 1
                     tokens.append(Token(TokenType.AT, "@", current_line_no, col))

@@ -75,6 +75,7 @@ class TokenType(Enum):
     COMMA = auto()
     DOT = auto()
     AT = auto()
+    SEMICOLON = auto()
 
 
 @dataclass(frozen=True)

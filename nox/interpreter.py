@@ -301,6 +301,55 @@ class Task:
         return self._result
 
 
+class ThreadWrapper:
+    def __init__(self, target: Callable[..., Any], *args: Any) -> None:
+        if not callable(target):
+            raise RuntimeError("Thread target must be callable")
+        self._target = lambda: target(*args)
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._started = False
+        self._result: Any = None
+        self._error: Optional[BaseException] = None
+
+    def _run(self) -> None:
+        try:
+            self._result = self._target()
+        except BaseException as exc:
+            self._error = exc
+
+    def start(self) -> None:
+        if self._started:
+            raise RuntimeError("Thread already started")
+        self._thread.start()
+        self._started = True
+
+    def join(self, timeout_ms: Optional[int] = None) -> Any:
+        timeout = None if timeout_ms is None else timeout_ms / 1000.0
+        self._thread.join(timeout)
+        if self._thread.is_alive():
+            raise RuntimeError("Thread join timeout")
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    def is_alive(self) -> bool:
+        return self._thread.is_alive()
+
+
+class LockWrapper:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+    def acquire(self, blocking: bool = True, timeout_ms: Optional[int] = None) -> bool:
+        if timeout_ms is not None:
+            timeout = timeout_ms / 1000.0
+            return self._lock.acquire(blocking, timeout)
+        return self._lock.acquire(blocking)
+
+    def release(self) -> None:
+        self._lock.release()
+
+
 @dataclass
 class StructType:
     name: str
@@ -386,7 +435,13 @@ class Interpreter:
         self.module_line: Optional[int] = None
         self.module_column: Optional[int] = None
         self.traits: Dict[str, Trait] = {}
+        self.stdlib_modules: Dict[str, Module] = {}
         self._install_stdlib()
+
+        # Make http, string, fs globally available
+        self.builtins["http"] = self.env.get("http")
+        self.builtins["string"] = self.env.get("string")
+        self.builtins["fs"] = self.env.get("fs")
 
     def run(self, program: Program) -> None:
         for stmt in program.statements:
@@ -820,6 +875,14 @@ class Interpreter:
     def _builtin_create_task(self, target: Any, *args: Any) -> Task:
         return Task(lambda: self._invoke_callable(target, list(args)))
 
+    def _builtin_thread_create(self, target: Any, *args: Any) -> ThreadWrapper:
+        if target is None:
+            raise RuntimeError("Thread target cannot be none")
+        return ThreadWrapper(lambda: self._invoke_callable(target, list(args)))
+
+    def _builtin_lock(self) -> LockWrapper:
+        return LockWrapper()
+
     def _builtin_gather(self, tasks: Any) -> AsyncResult:
         if not isinstance(tasks, list):
             raise RuntimeError("gather expects a list of tasks")
@@ -1191,13 +1254,22 @@ class Interpreter:
             },
         )
 
-        asyncio_mod = _module(
-            "asyncio",
+        async_mod = _module(
+            "async",
             {
                 "create_task": self._builtin_create_task,
                 "gather": self._builtin_gather,
                 "run": self._builtin_run_async,
                 "sleep": self._builtin_sleep,
+            },
+        )
+
+        threads_mod = _module(
+            "threads",
+            {
+                "Thread": self._builtin_thread_create,
+                "Lock": LockWrapper,
+                "create_thread": self._builtin_thread_create,
             },
         )
 
@@ -1210,20 +1282,30 @@ class Interpreter:
         _load_with_base = lambda path: _clib_module.load(path, base_dir=_base)
         clib_values = {**_clib_module._make_module_values(), "load": _load_with_base}
         clib_mod = _module("clib", clib_values)
-        self.env.set("clib", clib_mod)
 
-        self.env.set("process", process_mod)
+        self.stdlib_modules = {
+            "math": math_mod,
+            "time": time_mod,
+            "json": json_mod,
+            "fs": fs_mod,
+            "os": os_mod,
+            "http": http_mod,
+            "async": async_mod,
+            "Async": async_mod,
+            "asyncio": async_mod,
+            "asyncIO": async_mod,
+            "threads": threads_mod,
+            "Threads": threads_mod,
+            "threading": threads_mod,
+            "process": process_mod,
+            "compiler": compiler_mod,
+            "clib": clib_mod,
+        }
 
-        self.env.set("compiler", compiler_mod)
-
-        self.env.set("math", math_mod)
-        self.env.set("string", string_mod)
-        self.env.set("time", time_mod)
-        self.env.set("json", json_mod)
-        self.env.set("fs", fs_mod)
-        self.env.set("os", os_mod)
+        # Make http, string, fs globally available without connect
         self.env.set("http", http_mod)
-        self.env.set("asyncio", asyncio_mod)
+        self.env.set("string", string_mod)
+        self.env.set("fs", fs_mod)
 
     def _bind_args(self, params: List[Param], args: List[Any], env: Environment) -> Dict[str, Any]:
         bound: Dict[str, Any] = {}
@@ -1319,6 +1401,9 @@ class Interpreter:
                 return val
         except NameError:
             pass
+
+        if module_key in self.stdlib_modules:
+            return self.stdlib_modules[module_key]
 
         if module_key in self.module_cache:
             return self.module_cache[module_key]

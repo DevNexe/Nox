@@ -59,7 +59,7 @@ class Parser:
     def parse(self) -> Program:
         statements: List[Stmt] = []
         while not self._is_at_end():
-            if self._match(TokenType.NEWLINE):
+            if self._match(TokenType.NEWLINE, TokenType.SEMICOLON):
                 continue
             statements.append(self._statement())
         return Program(statements)
@@ -163,7 +163,6 @@ class Parser:
     def _if_stmt(self) -> Stmt:
         condition = self._expression()
         self._consume(TokenType.COLON, "Expected ':' after if condition")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
         then_body = self._block()
 
         elif_parts: List[tuple[Expr, List[Stmt]]] = []
@@ -172,13 +171,11 @@ class Parser:
             if self._match(TokenType.IF):
                 elif_cond = self._expression()
                 self._consume(TokenType.COLON, "Expected ':' after else if condition")
-                self._consume(TokenType.NEWLINE, "Expected newline after ':'")
                 elif_body = self._block()
                 elif_parts.append((elif_cond, elif_body))
                 continue
             self._consume(TokenType.COLON, "Expected ':' after else")
-            self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-            else_body = self._block()
+            else_body = self._block(allow_multiple=False)
             break
 
         return If(condition, then_body, elif_parts, else_body)
@@ -187,13 +184,11 @@ class Parser:
         if self._match(TokenType.TIMES):
             count = self._expression()
             self._consume(TokenType.COLON, "Expected ':' after repeat times condition")
-            self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-            body = self._block()
+            body = self._block(allow_multiple=False)
             return RepeatTimes(count, body)
         condition = self._expression()
         self._consume(TokenType.COLON, "Expected ':' after repeat condition")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-        body = self._block()
+        body = self._block(allow_multiple=False)
         return While(condition, body)
 
     def _for_stmt(self) -> Stmt:
@@ -201,8 +196,7 @@ class Parser:
         self._consume(TokenType.IN, "Expected 'in' after loop variable")
         iterable = self._expression()
         self._consume(TokenType.COLON, "Expected ':' after for expression")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-        body = self._block()
+        body = self._block(allow_multiple=False)
         return For(name_token.value, iterable, body)
 
     def _match_stmt(self) -> Stmt:
@@ -229,17 +223,14 @@ class Parser:
 
     def _try_stmt(self) -> Stmt:
         self._consume(TokenType.COLON, "Expected ':' after try")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
         try_body = self._block()
         except_body = None
         finally_body = None
         if self._match(TokenType.EXCEPT):
             self._consume(TokenType.COLON, "Expected ':' after except")
-            self._consume(TokenType.NEWLINE, "Expected newline after ':'")
             except_body = self._block()
         if self._match(TokenType.FINALLY):
             self._consume(TokenType.COLON, "Expected ':' after finally")
-            self._consume(TokenType.NEWLINE, "Expected newline after ':'")
             finally_body = self._block()
         if except_body is None and finally_body is None:
             token = self._previous()
@@ -253,23 +244,36 @@ class Parser:
             parent = self._consume(TokenType.IDENT, "Expected parent class name").value
             self._consume(TokenType.RPAREN, "Expected ')' after parent class")
         self._consume(TokenType.COLON, "Expected ':' after class name")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-        self._consume(TokenType.INDENT, "Expected indented class body")
         methods: List[Define] = []
         traits: List[str] = []
-        while not self._check(TokenType.DEDENT) and not self._is_at_end():
-            if self._match(TokenType.NEWLINE):
-                continue
-            if self._match(TokenType.IMPLEMENT):
-                trait_name = self._consume(TokenType.IDENT, "Expected trait name").value
-                traits.append(trait_name)
-                continue
-            if self._match(TokenType.DEFINE):
-                methods.append(self._define_stmt())
-                continue
-            token = self._peek()
-            raise NoxSyntaxError("Only define statements are allowed inside class", token.line, token.column)
-        self._consume(TokenType.DEDENT, "Expected end of class block")
+        if self._match(TokenType.NEWLINE):
+            self._consume(TokenType.INDENT, "Expected indented class body")
+            while not self._check(TokenType.DEDENT) and not self._is_at_end():
+                if self._match(TokenType.NEWLINE, TokenType.SEMICOLON):
+                    continue
+                if self._match(TokenType.IMPLEMENT):
+                    trait_name = self._consume(TokenType.IDENT, "Expected trait name").value
+                    traits.append(trait_name)
+                    continue
+                if self._match(TokenType.DEFINE):
+                    methods.append(self._define_stmt())
+                    continue
+                token = self._peek()
+                raise NoxSyntaxError("Only define statements are allowed inside class", token.line, token.column)
+            self._consume(TokenType.DEDENT, "Expected end of class block")
+        else:
+            while not self._check(TokenType.NEWLINE) and not self._is_at_end():
+                if self._match(TokenType.SEMICOLON):
+                    continue
+                if not self._check_any(TokenType.IMPLEMENT, TokenType.DEFINE):
+                    break
+                if self._match(TokenType.IMPLEMENT):
+                    trait_name = self._consume(TokenType.IDENT, "Expected trait name").value
+                    traits.append(trait_name)
+                    continue
+                if self._match(TokenType.DEFINE):
+                    methods.append(self._define_stmt())
+                    continue
         return ClassDef(name, methods, parent=parent, traits=traits)
 
     def _define_stmt(self, is_async: bool = False, decorators: Optional[List[Expr]] = None) -> Stmt:
@@ -278,7 +282,6 @@ class Parser:
         params = self._parse_params()
         self._consume(TokenType.RPAREN, "Expected ')' after parameters")
         self._consume(TokenType.COLON, "Expected ':' after function signature")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
         body = self._block()
         return Define(name, params, body, is_async=is_async, decorators=decorators)
 
@@ -300,18 +303,31 @@ class Parser:
     def _struct_stmt(self) -> Stmt:
         name = self._consume(TokenType.IDENT, "Expected struct name").value
         self._consume(TokenType.COLON, "Expected ':' after struct name")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-        self._consume(TokenType.INDENT, "Expected indented struct body")
         fields: List[str] = []
-        while not self._check(TokenType.DEDENT) and not self._is_at_end():
-            if self._match(TokenType.NEWLINE):
-                continue
-            field_name = self._consume(TokenType.IDENT, "Expected field name").value
-            self._consume(TokenType.COLON, "Expected ':' after field name")
-            self._consume(TokenType.IDENT, "Expected type name")
-            self._consume(TokenType.NEWLINE, "Expected newline after field")
-            fields.append(field_name)
-        self._consume(TokenType.DEDENT, "Expected end of struct block")
+        if self._match(TokenType.NEWLINE):
+            self._consume(TokenType.INDENT, "Expected indented struct body")
+            while not self._check(TokenType.DEDENT) and not self._is_at_end():
+                if self._match(TokenType.NEWLINE, TokenType.SEMICOLON):
+                    continue
+                field_name = self._consume(TokenType.IDENT, "Expected field name").value
+                self._consume(TokenType.COLON, "Expected ':' after field name")
+                self._consume(TokenType.IDENT, "Expected type name")
+                self._consume(TokenType.NEWLINE, "Expected newline after field")
+                fields.append(field_name)
+            self._consume(TokenType.DEDENT, "Expected end of struct block")
+        else:
+            while not self._check(TokenType.NEWLINE) and not self._is_at_end():
+                if self._match(TokenType.SEMICOLON):
+                    continue
+                if not self._check(TokenType.IDENT):
+                    break
+                field_name = self._consume(TokenType.IDENT, "Expected field name").value
+                self._consume(TokenType.COLON, "Expected ':' after field name")
+                self._consume(TokenType.IDENT, "Expected type name")
+                fields.append(field_name)
+                if self._match(TokenType.SEMICOLON):
+                    continue
+                break
         return StructDef(name, fields)
 
     def _with_stmt(self) -> Stmt:
@@ -319,8 +335,7 @@ class Parser:
         self._consume(TokenType.AS, "Expected 'as' after with expression")
         name = self._consume(TokenType.IDENT, "Expected name after 'as'").value
         self._consume(TokenType.COLON, "Expected ':' after with statement")
-        self._consume(TokenType.NEWLINE, "Expected newline after ':'")
-        body = self._block()
+        body = self._block(allow_multiple=False)
         return With(expr, name, body)
 
     def _trait_stmt(self) -> Stmt:
@@ -358,14 +373,33 @@ class Parser:
             return Return(None)
         return Return(self._expression())
 
-    def _block(self) -> List[Stmt]:
-        self._consume(TokenType.INDENT, "Expected indented block")
+    def _block(self, allow_multiple: bool = True, valid_starters: Optional[tuple[TokenType, ...]] = None) -> List[Stmt]:
+        if self._match(TokenType.NEWLINE):
+            self._consume(TokenType.INDENT, "Expected indented block")
+            statements: List[Stmt] = []
+            while not self._check(TokenType.DEDENT) and not self._is_at_end():
+                if self._match(TokenType.NEWLINE, TokenType.SEMICOLON):
+                    continue
+                statements.append(self._statement())
+            self._consume(TokenType.DEDENT, "Expected end of block")
+            return statements
+
         statements: List[Stmt] = []
-        while not self._check(TokenType.DEDENT) and not self._is_at_end():
-            if self._match(TokenType.NEWLINE):
+        if not allow_multiple:
+            if not self._check(TokenType.NEWLINE) and not self._is_at_end():
+                statements.append(self._statement())
+            while self._match(TokenType.SEMICOLON):
                 continue
+            return statements
+
+        while not self._check(TokenType.NEWLINE) and not self._check(TokenType.DEDENT) and not self._is_at_end():
+            if self._match(TokenType.SEMICOLON):
+                continue
+            if self._check(TokenType.ELSE) or self._check(TokenType.EXCEPT) or self._check(TokenType.FINALLY) or self._check(TokenType.CASE):
+                break
+            if valid_starters is not None and not self._check_any(*valid_starters):
+                break
             statements.append(self._statement())
-        self._consume(TokenType.DEDENT, "Expected end of block")
         return statements
 
     def _expression(self) -> Expr:
@@ -676,7 +710,11 @@ class Parser:
         return self.tokens[self.current + 3].type == t
 
     def _module_path(self, message: str) -> List[str]:
-        parts = [self._consume(TokenType.IDENT, message).value]
+        token = self._peek()
+        if token.type in {TokenType.IDENT, TokenType.ASYNC}:
+            parts = [self._advance().value]
+        else:
+            raise NoxSyntaxError(message, token.line, token.column)
         while self._match(TokenType.DOT):
             parts.append(self._consume(TokenType.IDENT, "Expected identifier after '.'").value)
         return parts
@@ -695,6 +733,11 @@ class Parser:
         setattr(expr, "line", token.line)
         setattr(expr, "column", token.column)
         return expr
+
+    def _check_any(self, *types: TokenType) -> bool:
+        if self._is_at_end():
+            return False
+        return self._peek().type in types
 
     def _match(self, *types: TokenType) -> bool:
         for t in types:

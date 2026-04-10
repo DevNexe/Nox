@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
@@ -9,9 +9,13 @@ from .interpreter import Interpreter
 from .errors import NoxSyntaxError, NoxRuntimeError
 from . import __version__
 from . import package as package_manager
+from .formatter import format_targets
 import sys
 from rich.console import Console
 from rich.text import Text
+from rich.table import Table
+from rich.panel import Panel
+from rich.columns import Columns
 
 _ERR_MARKER = ">"
 
@@ -271,6 +275,40 @@ def _resolve_run_target(path: str, cwd: Optional[Path] = None) -> Path:
 
     return target
 
+
+def _collect_nox_targets(targets: list[str]) -> list[str]:
+    resolved: list[str] = []
+    for target in targets:
+        path = Path(target)
+        if not path.is_absolute():
+            path = Path.cwd() / target
+        if path.exists():
+            if path.is_dir():
+                resolved.extend(str(p) for p in sorted(path.glob("*.nox")))
+            else:
+                resolved.append(str(path))
+        else:
+            resolved.append(str(path))
+    return resolved
+
+
+def _collect_test_targets(targets: list[str]) -> list[str]:
+    resolved: list[str] = []
+    for target in targets:
+        path = Path(target)
+        if not path.is_absolute():
+            path = Path.cwd() / target
+        if path.exists():
+            if path.is_dir():
+                resolved.extend(str(p) for p in sorted(path.glob("test_*.nox")))
+                resolved.extend(str(p) for p in sorted(path.glob("*_test.nox")))
+            else:
+                resolved.append(str(path))
+        else:
+            resolved.append(str(path))
+    return resolved
+
+
 def _format_code_snippet(path: str, line: int | None, context: int = 3) -> tuple[list[tuple[int, str]], int]:
     if line is None:
         return [], 0
@@ -349,6 +387,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     run_parser.add_argument("file", help="Path to .nox file or folder")
     subparsers.add_parser("repl", help="Start the Nox REPL")
 
+    fmt_parser = subparsers.add_parser("fmt", help="Format .nox files in place")
+    fmt_parser.add_argument("targets", nargs="*", help="File or folder paths (if empty, formats all .nox files in current directory)")
+
+    format_parser = subparsers.add_parser("format", help="Alias for fmt")
+    format_parser.add_argument("targets", nargs="*", help="File or folder paths (if empty, formats all .nox files in current directory)")
+
     pkg_parser = subparsers.add_parser("package", help="Manage Nox libraries")
     pkg_sub = pkg_parser.add_subparsers(dest="pkg_command")
 
@@ -366,8 +410,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     pkg_remove = pkg_sub.add_parser("remove", help="Remove an installed library")
     pkg_remove.add_argument("name", help="Library name")
 
+    lint_parser = subparsers.add_parser("lint", help="Check .nox files for errors and warnings")
+    lint_parser.add_argument("targets", nargs="*", help="File or folder paths to check")
+
+    test_parser = subparsers.add_parser("test", help="Run tests")
+    test_parser.add_argument("targets", nargs="*", help="Test file or folder paths (if empty, finds tests automatically)")
+
     raw_argv = list(argv) if argv is not None else sys.argv[1:]
-    if raw_argv and raw_argv[0] not in {"run", "package", "repl"} and not raw_argv[0].startswith("-"):
+    if raw_argv and raw_argv[0] not in {"run", "package", "repl", "fmt", "format", "lint", "test"} and not raw_argv[0].startswith("-"):
         raw_argv = ["run", *raw_argv]
     args = parser.parse_args(raw_argv)
 
@@ -378,6 +428,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command is None:
         return _run_repl()
 
+    if args.command in {"fmt", "format"}:
+        try:
+            targets = args.targets
+            if not targets:
+                cwd = Path.cwd()
+                targets = [str(p) for p in cwd.glob("*.nox")]
+                if not targets:
+                    console.print(Text("No .nox files found in current directory.", style="yellow"))
+                    return 0
+            else:
+                targets = _collect_nox_targets(targets)
+                if not targets:
+                    console.print(Text("No .nox files found for the given path(s).", style="yellow"))
+                    return 0
+            summary = format_targets(targets)
+            if summary.formatted:
+                console.print(Text(f"Formatted {len(summary.formatted)} file(s):", style="bold green"))
+                for path in summary.formatted:
+                    console.print(Text(f"  {path}", style="green"))
+            else:
+                console.print(Text("All files are already formatted.", style="cyan"))
+
+            if summary.skipped_comments:
+                console.print(Text("Skipped files (with comments):", style="bold yellow"))
+                for path in summary.skipped_comments:
+                    console.print(Text(f"  {path}", style="yellow"))
+                console.print(Text("Note: Comment-aware formatting is not supported yet.", style="yellow"))
+            return 0
+        except NoxSyntaxError as exc:
+            _print_error("SyntaxError", str(exc))
+            return 2
+        except Exception as exc:
+            _print_error("RuntimeError", str(exc))
+            return 3
     if args.command == "package":
         try:
             if args.pkg_command == "install":
@@ -389,6 +473,130 @@ def main(argv: Optional[list[str]] = None) -> int:
             if args.pkg_command == "remove":
                 return package_manager.remove(args.name)
             raise RuntimeError("Unknown package command")
+        except Exception as exc:
+            _print_error("RuntimeError", str(exc))
+            return 3
+
+    if args.command == "lint":
+        try:
+            if not args.targets:
+                targets = [str(p) for p in Path.cwd().glob("*.nox")]
+            else:
+                targets = _collect_nox_targets(args.targets)
+            if not targets:
+                console.print(Text("No .nox files found.", style="yellow"))
+                return 0
+
+            errors_found = False
+            console.print(Text(f"Linting {len(targets)} file(s)...", style="bold cyan"))
+            
+            for target_path in targets:
+                path = Path(target_path)
+                if not path.exists():
+                    text = Text(f"  {path}: ")
+                    text.append("ERROR", style="red")
+                    text.append(" File not found")
+                    console.print(text)
+                    errors_found = True
+                    continue
+                
+                try:
+                    source = path.read_text(encoding="utf-8")
+                    tokens = Lexer(source).tokenize()
+                    Parser(tokens).parse()
+                    text = Text(f"  {path}: ")
+                    text.append("OK", style="green")
+                    console.print(text)
+                except NoxSyntaxError as exc:
+                    text = Text(f"  {path}: ")
+                    text.append("ERROR", style="red")
+                    text.append(f" {str(exc)}")
+                    console.print(text)
+                    errors_found = True
+                except Exception as exc:
+                    text = Text(f"  {path}: ")
+                    text.append("ERROR", style="red")
+                    text.append(f" {str(exc)}")
+                    console.print(text)
+                    errors_found = True
+
+            if errors_found:
+                console.print(Text("Linting completed with errors.", style="bold red"))
+                return 1
+            else:
+                console.print(Text("All files passed linting.", style="bold green"))
+                return 0
+        except Exception as exc:
+            _print_error("RuntimeError", str(exc))
+            return 3
+
+    if args.command == "test":
+        try:
+            if not args.targets:
+                cwd = Path.cwd()
+                test_files = list(cwd.glob("test_*.nox")) + list(cwd.glob("*_test.nox"))
+                if test_files:
+                    targets = [str(p) for p in test_files]
+                else:
+                    console.print(Text("No test files found. Looking for test_*.nox or *_test.nox", style="yellow"))
+                    return 0
+            else:
+                targets = _collect_test_targets(args.targets)
+                if not targets:
+                    console.print(Text("No test files found for the given path(s).", style="yellow"))
+                    return 0
+
+            console.print(Text(f"Running {len(targets)} test file(s)...", style="bold cyan"))
+            
+            passed = 0
+            failed = 0
+            
+            for target_path in targets:
+                path = Path(target_path)
+                if not path.exists():
+                    text = Text(f"  {path}: ")
+                    text.append("SKIP", style="red")
+                    text.append(" File not found")
+                    console.print(text)
+                    failed += 1
+                    continue
+                
+                try:
+                    console.print(Text(f"  Running {path}...", style="cyan"))
+                    source = path.read_text(encoding="utf-8")
+                    tokens = Lexer(source).tokenize()
+                    program = Parser(tokens).parse()
+                    Interpreter(base_dir=path.parent, current_file=path).run(program)
+                    text = Text("    ")
+                    text.append("PASSED", style="green")
+                    console.print(text)
+                    passed += 1
+                except NoxSyntaxError as exc:
+                    text = Text("    ")
+                    text.append("FAILED", style="red")
+                    text.append(f" SyntaxError: {str(exc)}")
+                    console.print(text)
+                    failed += 1
+                except NoxRuntimeError as exc:
+                    text = Text("    ")
+                    text.append("FAILED", style="red")
+                    text.append(f" {str(exc)}")
+                    console.print(text)
+                    failed += 1
+                except Exception as exc:
+                    text = Text("    ")
+                    text.append("FAILED", style="red")
+                    text.append(f" {str(exc)}")
+                    console.print(text)
+                    failed += 1
+
+            console.print("")
+            if failed == 0:
+                console.print(Text(f"All {passed} test(s) passed.", style="bold green"))
+                return 0
+            else:
+                console.print(Text(f"{passed} passed, {failed} failed.", style="bold red"))
+                return 1
         except Exception as exc:
             _print_error("RuntimeError", str(exc))
             return 3
@@ -451,3 +659,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     except Exception as exc:
         _print_error("Internal Error", str(exc))
         return 1
+
+
+
+
+
+
+
+
