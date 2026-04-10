@@ -30,14 +30,15 @@ Key ideas: indentation for blocks, `define` for functions, `result` for return, 
 - **Indexing and access** - Access elements with `[index]` or `.attribute`
 - **Collections** - Lists, dictionaries, tuples, sets, and strings
 
-### Advanced Features
-- **Lambda expressions** - In-line anonymous functions
-- **Decorators** - Function decoration with `@`
-- **Classes and OOP** - Object-oriented programming with inheritance
-- **Traits** - Interface-like contracts for classes
-- **Exception handling** - try/except/finally blocks
-- **Async/await** - Asynchronous function support
-- **Pattern matching** - `match` statement for complex conditionals
+## Command Line Interface
+
+Nox provides several CLI commands for development:
+
+- `nox fmt [files]`: Formats Nox source code files
+- `nox lint [files]`: Lints Nox source code for errors and style issues
+- `nox test [files]`: Runs tests for Nox projects
+
+If no files are specified, `lint` and `test` scan the current directory recursively.
 
 ## Example with New Features
 

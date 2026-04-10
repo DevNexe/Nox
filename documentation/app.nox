@@ -47,6 +47,7 @@ pages_en = pages_en + [("/oop", "documentation/docs/pages/en/oop.md")]
 pages_en = pages_en + [("/modules", "documentation/docs/pages/en/modules.md")]
 pages_en = pages_en + [("/errors", "documentation/docs/pages/en/errors.md")]
 pages_en = pages_en + [("/stdlib", "documentation/docs/pages/en/stdlib.md")]
+pages_en = pages_en + [("/advanced", "documentation/docs/pages/en/advanced.md")]
 pages_en = pages_en + [("/noxweb", "documentation/docs/pages/en/noxweb.md")]
 pages_en = pages_en + [("/noxgram", "documentation/docs/pages/en/noxgram.md")]
 pages_en = pages_en + [("/noxgl", "documentation/docs/pages/en/noxgl.md")]
@@ -87,6 +88,7 @@ pages_ru = pages_ru + [("/oop", "documentation/docs/pages/ru/oop.md")]
 pages_ru = pages_ru + [("/modules", "documentation/docs/pages/ru/modules.md")]
 pages_ru = pages_ru + [("/errors", "documentation/docs/pages/ru/errors.md")]
 pages_ru = pages_ru + [("/stdlib", "documentation/docs/pages/ru/stdlib.md")]
+pages_ru = pages_ru + [("/advanced", "documentation/docs/pages/ru/advanced.md")]
 pages_ru = pages_ru + [("/noxweb", "documentation/docs/pages/ru/noxweb.md")]
 pages_ru = pages_ru + [("/noxgram", "documentation/docs/pages/ru/noxgram.md")]
 pages_ru = pages_ru + [("/noxgl", "documentation/docs/pages/ru/noxgl.md")]
@@ -291,6 +293,7 @@ app.get("/oop", page_handler)
 app.get("/modules", page_handler)
 app.get("/errors", page_handler)
 app.get("/stdlib", page_handler)
+app.get("/advanced", page_handler)
 app.get("/noxweb", page_handler)
 app.get("/noxgram", page_handler)
 app.get("/noxgl", page_handler)

@@ -1,14 +1,16 @@
 # Стандартная библиотека
 
-- `math`: abs, min, max, floor, ceil, sqrt, pow
-- `string`: str, split, join, lower, upper, replace, startswith
-- `time`: now, sleep
-- `json`: encode, decode
-- `fs`: read, write, exists
-- `os`: cwd, listdir
-- `http`: serve
-- `asyncio`: create_task, gather, run, sleep
-- `clib`: load, call
+Все модули стандартной библиотеки требуют `connect` для импорта, за исключением `http`, `string` и `fs`, которые доступны глобально.
+
+- `math`: abs, min, max, floor, ceil, sqrt, pow (требует `connect math`)
+- `string`: str, split, join, lower, upper, replace, startswith (доступен глобально)
+- `time`: now, sleep (требует `connect time`)
+- `json`: encode, decode (требует `connect json`)
+- `fs`: read, write, exists (доступен глобально)
+- `os`: cwd, listdir (требует `connect os`)
+- `http`: serve, request, get, post (доступен глобально)
+- `asyncio`: create_task, gather, run, sleep (требует `connect asyncio`)
+- `clib`: load, call (требует `connect clib`)
 
 ## HTTP helpers
 
