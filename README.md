@@ -16,7 +16,7 @@
 
 ## What is Nox?
 
-Nox is a **tree-walking interpreted language** with its own lexer, parser, AST, and interpreter — written entirely in pure Python, with zero use of `eval` or `exec`. It's fast to hack on, easy to read, and designed to grow.
+Nox is a **tree-walking interpreted language** with its own lexer, parser, AST, and interpreter — written entirely in pure Python. It's fast to hack on, easy to read, and designed to grow.
 
 It has classes, traits, structs, async/await, decorators, pattern matching, C/C++ FFI, a built-in HTTP server, and a GitHub-powered package manager. The docs site runs as a Nox web app.
 
